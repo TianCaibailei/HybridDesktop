@@ -32,6 +32,9 @@ namespace HybridApp.Wpf
 
             // 1. Create VM
             _visionVM = new VisionVM();
+            this.DataContext = _visionVM;
+            webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
+
             _visionVM.AttachSyncAction((vmName, propName, value) =>
             {
                 var message = new
@@ -55,7 +58,7 @@ namespace HybridApp.Wpf
             // bin/Debug/net8.0-windows/../../../.. -> Project Root
             string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
             string frontendPath = Path.Combine(projectRoot, "HybridApp.Frontend", "src", "store", "generatedStore.ts");
-            generator.Generate(frontendPath);
+            generator.Generate(frontendPath,this.GetType().Assembly);
 #endif
 
             // 3. Image Stream
@@ -80,6 +83,33 @@ namespace HybridApp.Wpf
 
             // 5. Navigate
             webView.CoreWebView2.Navigate("http://localhost:5173");
+        }
+
+        private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                string json = e.WebMessageAsJson;
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("type", out var typeProp) && typeProp.GetString() == "STATE_SET")
+                {
+                    var payload = root.GetProperty("payload");
+                    string vmName = payload.GetProperty("vmName").GetString();
+                    string propName = payload.GetProperty("propName").GetString();
+                    var value = payload.GetProperty("value");
+
+                    if (vmName == "VisionVM")
+                    {
+                        _visionVM.SetPropertyByName(propName, value);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error handling web message: {ex.Message}");
+            }
         }
 
         private byte[] GenerateRandomImage(int width, int height)
