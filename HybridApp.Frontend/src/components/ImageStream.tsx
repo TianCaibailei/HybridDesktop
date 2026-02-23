@@ -1,25 +1,35 @@
-// High-speed image stream component
-import { useEffect, useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 
 interface ImageStreamProps {
-  channel: string;
-  fps?: number;
-  className?: string;
+    channel: string;
+    fps?: number;
+    className?: string;
 }
 
-export function ImageStream({ channel, fps = 30, className }: ImageStreamProps) {
-  const imgRef = useRef<HTMLImageElement>(null);
+export const ImageStream: React.FC<ImageStreamProps> = ({ channel, fps = 30, className }) => {
+    const imgRef = useRef<HTMLImageElement>(null);
+    const timerRef = useRef<NodeJS.Timeout>();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (imgRef.current) {
-        // Update the src with a timestamp to force a reload
-        imgRef.current.src = `/stream/${channel}?t=${performance.now()}`;
-      }
-    }, 1000 / fps);
+    useEffect(() => {
+        const intervalMs = 1000 / fps;
+        
+        const fetchNextFrame = () => {
+            if (imgRef.current) {
+                imgRef.current.src = `http://hybrid.vision/${channel}?t=${performance.now()}`;
+            }
+        };
 
-    return () => clearInterval(interval);
-  }, [channel, fps]);
+        timerRef.current = setInterval(fetchNextFrame, intervalMs);
 
-  return <img ref={imgRef} className={className} alt={`Stream ${channel}`} />;
-}
+        return () => clearInterval(timerRef.current);
+    }, [channel, fps]);
+
+    return (
+        <img 
+            ref={imgRef} 
+            className={className} 
+            style={{ width: '100%', height: '100%', objectFit: 'contain', backgroundColor: '#000' }} 
+            alt={`Stream: ${channel}`} 
+        />
+    );
+};
