@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
-interface SharedBufferEvent extends CustomEvent {
-  detail: {
-    channel: string;
-    buffer: SharedArrayBuffer;
-  };
+interface SharedBufferDetail {
+  channel: string;
+  buffer: SharedArrayBuffer;
 }
 
 export function useSharedBuffer(channelName: string) {
@@ -14,21 +12,19 @@ export function useSharedBuffer(channelName: string) {
 
   useEffect(() => {
     const handleSharedBuffer = (event: Event) => {
-      const customEvent = event as SharedBufferEvent;
+      const customEvent = event as CustomEvent<SharedBufferDetail>;
       if (customEvent.detail && customEvent.detail.channel === channelName) {
         bufferRef.current = customEvent.detail.buffer;
         float32ArrayRef.current = new Float32Array(bufferRef.current);
-        console.log(`Shared buffer received for channel: ${channelName}`);
         setTick(t => t + 1);
       }
     };
 
     const handleMessage = (event: MessageEvent) => {
       if (typeof event.data === 'string' && event.data.startsWith('SHARED_MEM_READY:')) {
-        const readyChannel = event.data.split(':')[1];
-        if (readyChannel === channelName) {
-          // Force a re-render or update state to indicate new data is available
-          setTick((prev) => prev + 1);
+        const parts = event.data.split(':');
+        if (parts.length > 1 && parts[1] === channelName) {
+           setTick(t => t + 1);
         }
       }
     };
@@ -42,9 +38,7 @@ export function useSharedBuffer(channelName: string) {
     };
   }, [channelName]);
 
-  const getActiveData = () => {
-    return float32ArrayRef.current;
-  };
+  const getActiveData = () => float32ArrayRef.current;
 
   return { getActiveData, tick };
 }
