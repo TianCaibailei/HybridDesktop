@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import './App.css';
 import { useAppStore } from './store/generatedStore';
 import { ImageStream } from './components/ImageStream';
+import { useSharedBuffer } from './hooks/useSharedBuffer';
 
 function App() {
   const updateStateFromBackend = useAppStore((state) => state.updateStateFromBackend);
   const visionVM = useAppStore((state) => state.visionVM);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { getActiveData, tick } = useSharedBuffer("sine-wave");
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -37,6 +39,36 @@ function App() {
       }
     };
   }, [updateStateFromBackend]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const render = () => {
+        const data = getActiveData();
+        if (data.length === 0) return;
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = '#0f0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        const step = canvas.width / data.length;
+        for (let i = 0; i < data.length; i++) {
+            const x = i * step;
+            const y = canvas.height / 2 - data[i] * (canvas.height / 3);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+    };
+
+    render();
+  }, [tick, getActiveData]);
 
   return (
     <div className="App">
