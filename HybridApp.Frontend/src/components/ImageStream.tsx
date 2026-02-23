@@ -13,7 +13,6 @@ export function ImageStream({ channel, fps = 30, className }: ImageStreamProps) 
     const interval = setInterval(() => {
       if (imgRef.current) {
         // Update the src with a timestamp to force a reload
-        // We assume the image is served at /stream/{channel}
         imgRef.current.src = `/stream/${channel}?t=${performance.now()}`;
       }
     }, 1000 / fps);
