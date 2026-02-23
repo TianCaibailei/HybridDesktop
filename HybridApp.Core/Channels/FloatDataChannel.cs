@@ -2,6 +2,7 @@ using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace HybridApp.Core.Channels
 {
@@ -14,13 +15,15 @@ namespace HybridApp.Core.Channels
         public FloatDataChannel(CoreWebView2 webView, string channelName, int maxElements)
         {
             _webView = webView;
+            // �ؼ��㣺�ȴ���ʼ�����
             ChannelName = channelName;
             
             ulong size = (ulong)(maxElements * sizeof(float));
             _sharedBuffer = _webView.Environment.CreateSharedBuffer(size);
             
+            
             // Post shared buffer to script
-            _webView.PostSharedBufferToScript(_sharedBuffer, CoreWebView2SharedBufferAccess.ReadOnly, ChannelName);
+            _webView.PostSharedBufferToScript(_sharedBuffer, CoreWebView2SharedBufferAccess.ReadWrite, JsonSerializer.Serialize(new { channel = ChannelName }));
         }
 
         public void Push(float[] data)
