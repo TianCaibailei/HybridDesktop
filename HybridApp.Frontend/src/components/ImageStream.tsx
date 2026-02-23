@@ -1,3 +1,4 @@
+// High-speed image stream component
 import { useEffect, useRef } from 'react';
 
 interface ImageStreamProps {

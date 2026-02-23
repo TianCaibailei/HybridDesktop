@@ -1,3 +1,4 @@
+// High-speed channel hook
 import { useEffect, useRef, useState } from 'react';
 
 interface SharedBufferDetail {
