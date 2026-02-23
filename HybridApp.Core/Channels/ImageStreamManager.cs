@@ -14,18 +14,19 @@ namespace HybridApp.Core.Channels
             webView.WebResourceRequested += (sender, args) =>
             {
                 var uri = new Uri(args.Request.Uri);
-                var channelName = uri.AbsolutePath.TrimStart('/');
-                
-                var imageData = OnImageRequested?.Invoke(channelName);
-                
-                if (imageData != null)
+                if (uri.Host == "hybrid.vision")
                 {
-                    var stream = new MemoryStream(imageData);
-                    args.Response = webView.Environment.CreateWebResourceResponse(stream, 200, "OK", "Content-Type: image/jpeg");
-                }
-                else
-                {
-                    args.Response = webView.Environment.CreateWebResourceResponse(null, 404, "Not Found", "");
+                    var channelName = uri.AbsolutePath.Trim('/');
+                    var imageData = OnImageRequested?.Invoke(channelName);
+                    if (imageData != null)
+                    {
+                        var stream = new MemoryStream(imageData);
+                        args.Response = webView.Environment.CreateWebResourceResponse(stream, 200, "OK", "Content-Type: image/jpeg");
+                    }
+                    else
+                    {
+                        args.Response = webView.Environment.CreateWebResourceResponse(null, 404, "Not Found", "");
+                    }
                 }
             };
         }
