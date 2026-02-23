@@ -1,45 +1,43 @@
-// High-speed channel hook
-import { useEffect, useRef, useState } from 'react';
-
-interface SharedBufferDetail {
-  channel: string;
-  buffer: SharedArrayBuffer;
-}
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 export function useSharedBuffer(channelName: string) {
-  const bufferRef = useRef<SharedArrayBuffer | null>(null);
-  const float32ArrayRef = useRef<Float32Array | null>(null);
-  const [tick, setTick] = useState(0);
+    const sharedArrayRef = useRef<Float32Array | null>(null);
+    const [tick, setTick] = useState(0); 
+    const dataLengthRef = useRef<number>(0);
 
-  useEffect(() => {
-    const handleSharedBuffer = (event: Event) => {
-      const customEvent = event as CustomEvent<SharedBufferDetail>;
-      if (customEvent.detail && customEvent.detail.channel === channelName) {
-        bufferRef.current = customEvent.detail.buffer;
-        float32ArrayRef.current = new Float32Array(bufferRef.current);
-        setTick(t => t + 1);
-      }
-    };
+    useEffect(() => {
+        const handleSharedBuffer = (e: any) => {
+            if (e.additionalData === channelName) {
+                sharedArrayRef.current = new Float32Array(e.getBuffer());
+                console.log(`[SharedMem] Channel ${channelName} connected.`);
+            }
+        };
 
-    const handleMessage = (event: MessageEvent) => {
-      if (typeof event.data === 'string' && event.data.startsWith('SHARED_MEM_READY:')) {
-        const parts = event.data.split(':');
-        if (parts.length > 1 && parts[1] === channelName) {
-          setTick(t => t + 1);
+        const handleMessage = (e: any) => {
+            if (typeof e.data === 'string' && e.data.startsWith('SHARED_MEM_READY:')) {
+                const parts = e.data.split(':');
+                if (parts[1] === channelName) {
+                    dataLengthRef.current = parseInt(parts[2], 10);
+                    setTick(t => t + 1); 
+                }
+            }
+        };
+
+        if ((window as any).chrome?.webview) {
+            (window as any).chrome.webview.addEventListener('sharedbufferreceived', handleSharedBuffer);
+            (window as any).chrome.webview.addEventListener('message', handleMessage);
         }
-      }
-    };
 
-    window.addEventListener('sharedbufferreceived', handleSharedBuffer);
-    window.addEventListener('message', handleMessage);
+        return () => {
+            (window as any).chrome?.webview?.removeEventListener('sharedbufferreceived', handleSharedBuffer);
+            (window as any).chrome?.webview?.removeEventListener('message', handleMessage);
+        };
+    }, [channelName]);
 
-    return () => {
-      window.removeEventListener('sharedbufferreceived', handleSharedBuffer);
-      window.removeEventListener('message', handleMessage);
-    };
-  }, [channelName]);
+    const getActiveData = useCallback(() => {
+        if (!sharedArrayRef.current) return new Float32Array(0);
+        return sharedArrayRef.current.subarray(0, dataLengthRef.current);
+    }, []);
 
-  const getActiveData = () => float32ArrayRef.current;
-
-  return { getActiveData, tick };
+    return { getActiveData, tick };
 }
