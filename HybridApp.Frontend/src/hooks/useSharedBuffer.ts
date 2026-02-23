@@ -24,7 +24,7 @@ export function useSharedBuffer(channelName: string) {
       if (typeof event.data === 'string' && event.data.startsWith('SHARED_MEM_READY:')) {
         const parts = event.data.split(':');
         if (parts.length > 1 && parts[1] === channelName) {
-           setTick(t => t + 1);
+          setTick(t => t + 1);
         }
       }
     };
