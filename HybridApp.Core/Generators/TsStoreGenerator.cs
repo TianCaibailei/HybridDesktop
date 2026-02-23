@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using HybridApp.Core.Attributes;
+using HybridApp.Core.ViewModels;
 
 namespace HybridApp.Core.Generators
 {
@@ -36,9 +37,9 @@ namespace HybridApp.Core.Generators
                 
                 sb.AppendLine($"export interface {vmName} {{");
                 
-                // Get public instance properties, declared in the class itself (skipping base class props like VmName)
-                // If you need inherited properties from other base classes, you might need to adjust BindingFlags
-                var properties = vm.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                // Get public instance properties, including inherited ones, but exclude SyncViewModelBase and Object props
+                var properties = vm.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(p => p.DeclaringType != typeof(SyncViewModelBase) && p.DeclaringType != typeof(object));
 
                 foreach (var prop in properties)
                 {
@@ -99,7 +100,10 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("    };");
             sb.AppendLine("  }),");
 
+            // setBackendState implementation
             sb.AppendLine("  setBackendState: (newState) => set((state) => ({ ...state, ...newState })),");
+            
+            // initFullState implementation
             sb.AppendLine("  initFullState: (fullState) => set(fullState),");
 
             sb.AppendLine("}));");
@@ -143,10 +147,32 @@ namespace HybridApp.Core.Generators
                 var elementType = targetType.GetElementType();
                 tsType = elementType != null ? $"{MapToTsType(elementType)}[]" : "any[]";
             }
-            else if (targetType.IsGenericType && (targetType.GetGenericTypeDefinition() == typeof(List<>) || targetType.GetGenericTypeDefinition() == typeof(IEnumerable<>)))
+            else if (targetType.IsGenericType)
             {
-                var argType = targetType.GetGenericArguments()[0];
-                tsType = $"{MapToTsType(argType)}[]";
+                var genericDef = targetType.GetGenericTypeDefinition();
+                if (genericDef == typeof(List<>) || genericDef == typeof(IEnumerable<>) || genericDef == typeof(IList<>) || genericDef == typeof(IReadOnlyList<>))
+                {
+                    var argType = targetType.GetGenericArguments()[0];
+                    tsType = $"{MapToTsType(argType)}[]";
+                }
+                else if (genericDef == typeof(Dictionary<,>) || genericDef == typeof(IDictionary<,>) || genericDef == typeof(IReadOnlyDictionary<,>))
+                {
+                    var keyType = targetType.GetGenericArguments()[0];
+                    var valueType = targetType.GetGenericArguments()[1];
+                    var tsKeyType = MapToTsType(keyType);
+                    var tsValueType = MapToTsType(valueType);
+                    
+                    // TS only supports string/number/symbol as key.
+                    // If key is number, TS allows it in index signature.
+                    if (tsKeyType == "string" || tsKeyType == "number")
+                    {
+                        tsType = $"{{ [key: {tsKeyType}]: {tsValueType} }}";
+                    }
+                    else
+                    {
+                        tsType = $"Record<string, {tsValueType}>";
+                    }
+                }
             }
 
             return isNullable ? $"{tsType} | null" : tsType;
