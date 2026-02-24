@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 export function useSharedBuffer(channelName: string) {
     const sharedArrayRef = useRef<Float32Array | null>(null);
-    const [tick, setTick] = useState(0); 
+    const [tick, setTick] = useState(0);
     const dataLengthRef = useRef<number>(0);
 
     useEffect(() => {
@@ -18,7 +18,7 @@ export function useSharedBuffer(channelName: string) {
                 const parts = e.data.split(':');
                 if (parts[1] === channelName) {
                     dataLengthRef.current = parseInt(parts[2], 10);
-                    setTick(t => t + 1); 
+                    setTick(t => t + 1);
                 }
             }
         };
@@ -26,6 +26,8 @@ export function useSharedBuffer(channelName: string) {
         if ((window as any).chrome?.webview) {
             (window as any).chrome.webview.addEventListener('sharedbufferreceived', handleSharedBuffer);
             (window as any).chrome.webview.addEventListener('message', handleMessage);
+            // 主动向后端请求一次句柄，防止组件加载晚于句柄推送
+            (window as any).chrome.webview.postMessage({ type: 'REQUEST_BUFFER_HANDLE', channelName });
         }
 
         return () => {

@@ -6,35 +6,80 @@
         xmlns:local="clr-namespace:HybridApp.Wpf"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="Hybrid App Host - Core Framework" Height="700" Width="1100"
+        Background="#F5F5F7"
+        Loaded="Window_Loaded">
 
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="250" />
+            <ColumnDefinition Width="320" />
         </Grid.ColumnDefinitions>
 
-        <wv2:WebView2 Name="webView" Grid.Column="0" />
+        <!--{/* WebView on the left */}-->
+        <Border Grid.Column="0" Margin="10" BorderThickness="1" BorderBrush="#DDD" CornerRadius="8" Background="White">
+            <wv2:WebView2 Name="webView" />
+        </Border>
 
-        <StackPanel Grid.Column="1" Margin="10">
-            <TextBlock Text="Vision Settings" FontSize="18" FontWeight="Bold" Margin="0,0,0,10" />
+        <!--{/* C# Native Panel on the right */}-->
+        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="15">
+                <TextBlock Text="Native Controller (C#)" FontSize="22" FontWeight="ExtraBold" Foreground="#333" Margin="0,0,0,20" />
 
-            <TextBlock Text="Exposure" />
-            <Slider Minimum="0" Maximum="100" Value="{Binding Exposure, Mode=TwoWay}" />
-            <TextBlock Text="{Binding Exposure}" HorizontalAlignment="Right" />
+                <!--{/* Vision Panel */}-->
+                <Border BorderThickness="1" BorderBrush="#CCC" CornerRadius="5" Background="White" Padding="15" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="VISION MODULE" FontSize="14" FontWeight="Bold" Foreground="#0078D4" Margin="0,0,0,10" />
+                        
+                        <TextBlock Text="Exposure Time (ms)" Margin="0,5,0,2" Foreground="#666" />
+                        <DockPanel>
+                            <Slider Minimum="0" Maximum="100" Value="{Binding Vision.Exposure, Mode=TwoWay}" VerticalAlignment="Center" DockPanel.Dock="Left" Width="180" />
+                            <TextBlock Text="{Binding Vision.Exposure}" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </DockPanel>
 
-            <TextBlock Text="Gain" Margin="0,10,0,0" />
-            <Slider Minimum="0" Maximum="10" Value="{Binding Gain, Mode=TwoWay}" />
-            <TextBlock Text="{Binding Gain, StringFormat=F1}" HorizontalAlignment="Right" />
+                        <TextBlock Text="Analog Gain" Margin="0,15,0,2" Foreground="#666" />
+                        <DockPanel>
+                            <Slider Minimum="1.0" Maximum="10.0" Value="{Binding Vision.Gain, Mode=TwoWay}" VerticalAlignment="Center" Width="180" />
+                            <TextBlock Text="{Binding Vision.Gain, StringFormat=F1}" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0" />
+                        </DockPanel>
 
-            <CheckBox Content="Is Running" IsChecked="{Binding IsRunning, Mode=TwoWay}" Margin="0,10,0,0" />
+                        <CheckBox Content="Enable Processing" IsChecked="{Binding Vision.IsRunning, Mode=TwoWay}" Margin="0,15,0,0" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
 
-            <Separator Margin="0,20" />
+                <!--{/* Complex Data Panel */}-->
+                <Border BorderThickness="4,1,1,1" BorderBrush="#FF9800" CornerRadius="5" Background="White" Padding="15" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="DEVICE CONFIG (Complex)" FontSize="14" FontWeight="Bold" Foreground="#FF9800" Margin="0,0,0,10" />
+                        
+                        <TextBlock Text="Model Name" Foreground="#666" />
+                        <TextBox Text="{Binding Complex.Config.ModelName, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Padding="5" Margin="0,2,0,10" />
 
-            <TextBlock Text="Current State:" FontWeight="Bold" />
-            <TextBlock Text="{Binding Exposure, StringFormat='Exposure: {0}'}" />
-            <TextBlock Text="{Binding Gain, StringFormat='Gain: {0:F1}'}" />
-            <TextBlock Text="{Binding IsRunning, StringFormat='Running: {0}'}" />
-        </StackPanel>
+                        <TextBlock Text="Calibration X" Foreground="#666" />
+                        <TextBox Text="{Binding Complex.Config.InternalCamera.ResolutionX, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Padding="5" Margin="0,2,0,10" />
+
+                        <TextBlock Text="Calibration Y" Foreground="#666" />
+                        <TextBox Text="{Binding Complex.Config.InternalCamera.ResolutionY, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}" Padding="5" Margin="0,2,0,0" />
+                        
+                        <TextBlock Text="Modes Count:" FontSize="11" Margin="0,10,0,0" />
+                        <TextBlock Text="{Binding Complex.Config.InternalCamera.SupportedModes.Count, StringFormat='Active Modes: {0}'}" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+
+                <!--{/* Action Tools */}-->
+                <Border BorderThickness="1" BorderBrush="#CCC" CornerRadius="5" Background="White" Padding="15">
+                    <StackPanel>
+                        <TextBlock Text="SYSTEM TOOLS" FontSize="14" FontWeight="Bold" Foreground="#666" Margin="0,0,0,10" />
+                        <Button Content="Initialize Oscilloscope" Click="Button_Click" Height="35" Background="#0078D4" Foreground="White" FontWeight="Bold" BorderThickness="0">
+                            <Button.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="4"/>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>

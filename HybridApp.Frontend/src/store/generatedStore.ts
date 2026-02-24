@@ -2,38 +2,106 @@
 // Do not edit manually
 import { create } from 'zustand';
 
+/**
+ * 处理复杂嵌套对象和集合数据的示例 ViewModel
+ */
+export interface ComplexVM {
+  /**
+   * 设备全局配置信息
+   */
+  config: DeviceConfig;
+  /**
+   * 系统状态字典信息
+   */
+  statusInfo: { [key: string]: string };
+}
+
+/**
+ * 相机视觉控制模块，处理曝光、增益等实时参数
+ */
 export interface VisionVM {
+  /**
+   * 曝光时间（毫秒）
+   */
   exposure: number;
+  /**
+   * 模拟增益倍数
+   */
   gain: number;
+  /**
+   * 是否正在运行图像处理算法
+   */
   isRunning: boolean;
 }
 
+export interface DeviceConfig {
+  internalCamera: CameraParams;
+  /**
+   * 设备型号名称
+   */
+  modelName: string;
+}
+
+export interface CameraParams {
+  /**
+   * 水平分辨率
+   */
+  resolutionX: number;
+  /**
+   * 垂直分辨率
+   */
+  resolutionY: number;
+  /**
+   * 支持的拍摄模式列表
+   */
+  supportedModes: string[];
+}
+
 export interface AppState {
+  /**
+   * 处理复杂嵌套对象和集合数据的示例 ViewModel
+   */
+  complexVM: ComplexVM;
+  /**
+   * 相机视觉控制模块，处理曝光、增益等实时参数
+   */
   visionVM: VisionVM;
 }
 
 export interface AppActions {
   updateStateFromBackend: (vmName: string, propName: string, value: any) => void;
-  setBackendState: (newState: Partial<AppState>) => void;
+  setBackendState: (vmName: string, propName: string, value: any) => void;
   initFullState: (fullState: AppState) => void;
 }
 
-export const useAppStore = create<AppState & AppActions>((set) => ({
+export const useAppStore = create<AppState & AppActions>((set, get) => ({
+  complexVM: {} as ComplexVM,
   visionVM: {} as VisionVM,
   updateStateFromBackend: (vmName, propName, value) => set((state) => {
-    // Convert PascalCase vmName to camelCase state key
     const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
-    // Check if the state key exists to avoid runtime errors
+    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
     if (!(stateKey in state)) return state;
-    
-    return {
-      ...state,
-      [stateKey]: {
-        ...(state as any)[stateKey],
-        [propName]: value
-      }
-    } as Partial<AppState>;
+    return { ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } };
   }),
-  setBackendState: (newState) => set((state) => ({ ...state, ...newState })),
-  initFullState: (fullState) => set(fullState),
+  setBackendState: (vmName, propName, value) => {
+    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
+    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
+    // 1. Update Local Store
+    set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));
+    // 2. Push to C# Backend
+    if ((window as any).chrome?.webview) {
+      (window as any).chrome.webview.postMessage({
+        type: 'STATE_SET',
+        payload: { vmName, propName, value }
+      });
+    }
+  },
+  initFullState: (fullState) => set((state) => {
+    const newState: any = { ...state };
+    for (const key in fullState) {
+        const stateKey = key.charAt(0).toLowerCase() + key.slice(1);
+        newState[stateKey] = (fullState as any)[key];
+    }
+    return newState;
+  }),
 }));

@@ -1,11 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Remove="MainWindow.xaml.utf8.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HybridApp.Core\HybridApp.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3800.47" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3848-prerelease" />
   </ItemGroup>
 
   <PropertyGroup>

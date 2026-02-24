@@ -15,15 +15,26 @@ namespace HybridApp.Core.Channels
         public FloatDataChannel(CoreWebView2 webView, string channelName, int maxElements)
         {
             _webView = webView;
-            // �ؼ��㣺�ȴ���ʼ�����
             ChannelName = channelName;
             
             ulong size = (ulong)(maxElements * sizeof(float));
             _sharedBuffer = _webView.Environment.CreateSharedBuffer(size);
             
-            
-            // Post shared buffer to script
-            _webView.PostSharedBufferToScript(_sharedBuffer, CoreWebView2SharedBufferAccess.ReadWrite, JsonSerializer.Serialize(new { channel = ChannelName }));
+            // 初始推送句柄给前端
+            SendHandleToScript();
+        }
+
+        public void ResendHandle()
+        {
+            SendHandleToScript();
+        }
+
+        private void SendHandleToScript()
+        {
+            // 通过 additionalData 传递频道名称，方便前端 Hook 识别
+            // 重要：此参数必须是合法的 JSON 字符串（即字符串需要带引号），所以必须 Serialize
+            string jsonMetadata = JsonSerializer.Serialize(ChannelName);
+            _webView.PostSharedBufferToScript(_sharedBuffer, CoreWebView2SharedBufferAccess.ReadWrite, jsonMetadata);
         }
 
         public void Push(float[] data)
@@ -35,6 +46,7 @@ namespace HybridApp.Core.Channels
                 stream.Write(byteData, 0, byteData.Length);
             }
             
+            // 发送就绪信号，包含数据长度
             _webView.PostWebMessageAsString($"SHARED_MEM_READY:{ChannelName}:{data.Length}");
         }
     }
