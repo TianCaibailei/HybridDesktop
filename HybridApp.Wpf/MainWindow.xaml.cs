@@ -88,18 +88,41 @@ namespace HybridApp.Wpf
                 _imageStreamManager.Attach(webView.CoreWebView2);
 
                 // 4. 导航
-                webView.CoreWebView2.Navigate("http://localhost:5173");
+                //webView.CoreWebView2.Navigate("http://localhost:5173");
 
-                webView.CoreWebView2.DOMContentLoaded += (s, ev) =>
+                // 1. 获取前端打包后的 dist 文件夹绝对物理路径
+                // 注意：如果是 WPF，通常用 AppDomain.CurrentDomain.BaseDirectory 代替 Application.StartupPath
+                string distFolderPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dist");
+
+                // 2. 检查文件夹是否存在（防止发布时漏掉文件导致白屏）
+                if (!Directory.Exists(distFolderPath))
                 {
-                    if (_floatDataChannel == null)
+                    MessageBox.Show($"找不到前端界面文件！请检查是否存在此目录：\n{distFolderPath}");
+                    return;
+                }
+
+                // 3. 【核心魔法】将本地文件夹映射为虚拟域名
+                // 这样 WebView2 就会在内部拦截发往 http://hybrid.app 的请求，并将其重定向到你的本地文件夹
+                webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "hybrid.app",                         // 虚拟域名（你可以随便起，不加后缀也可以）
+                    distFolderPath,                       // 映射到的本地物理路径
+                    CoreWebView2HostResourceAccessKind.Allow // 允许访问资源
+                );
+
+                // 4. 让 WebView2 导航到这个虚拟域名
+                // 前端 React/Vue 会完美地认为自己运行在一个真正的 Nginx/Apache 服务器上！
+                webView.CoreWebView2.Navigate("http://hybrid.app/index.html");
+
+                //webView.CoreWebView2.DOMContentLoaded += (s, ev) =>
+                //{
+                if (_floatDataChannel == null)
                     {
                         _floatDataChannel = new FloatDataChannel(webView.CoreWebView2, "sine-wave", 1024);
                         _ = StartSineWaveGenerator();
                     }
                     // 初次握手同步全量状态
                     _vmManager.SendFullState();
-                };
+                //};
             }
             else
             {

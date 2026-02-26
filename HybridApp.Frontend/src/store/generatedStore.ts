@@ -14,6 +14,10 @@ export interface ComplexVM {
    * 系统状态字典信息
    */
   statusInfo: { [key: string]: string };
+  /**
+   * 运行日志列表
+   */
+  logs: any;
 }
 
 /**
@@ -40,6 +44,17 @@ export interface DeviceConfig {
    * 设备型号名称
    */
   modelName: string;
+}
+
+export interface LogEntry {
+  /**
+   * 日志消息
+   */
+  message: string;
+  /**
+   * 日志级别
+   */
+  level: string;
 }
 
 export interface CameraParams {
@@ -74,7 +89,7 @@ export interface AppActions {
   initFullState: (fullState: AppState) => void;
 }
 
-export const useAppStore = create<AppState & AppActions>((set, get) => ({
+export const useAppStore = create<AppState & AppActions>((set) => ({
   complexVM: {} as ComplexVM,
   visionVM: {} as VisionVM,
   updateStateFromBackend: (vmName, propName, value) => set((state) => {

@@ -87,7 +87,7 @@ namespace HybridApp.Core.Generators
             sb.AppendLine();
 
             // 5. Generate Store
-            sb.AppendLine("export const useAppStore = create<AppState & AppActions>((set, get) => ({");
+            sb.AppendLine("export const useAppStore = create<AppState & AppActions>((set) => ({");
             
             // Initial State
             foreach (var vm in viewModels)
