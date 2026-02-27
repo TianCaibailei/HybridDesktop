@@ -73,9 +73,39 @@ public partial class Form1 : Form
             _vmManager.Register(_visionVM);
             _vmManager.Register(_complexVM);
 
-            propertyGridComplex.SelectedObject = _complexVM.Config;
-            listBoxLogs.DataSource = _complexVM.Logs;
+            
+            // ListBox DataSource needs BindingList for auto UI update in WinForms
+            var bindingLogs = new System.ComponentModel.BindingList<LogEntry>();
+            foreach (var log in _complexVM.Logs)
+            {
+                bindingLogs.Add(log);
+            }
+            listBoxLogs.DataSource = bindingLogs;
             listBoxLogs.DisplayMember = "Message";
+
+            // Bindings for VisionVM
+            numericUpDownGain.DataBindings.Add("Value", _visionVM, "Gain", false, DataSourceUpdateMode.OnPropertyChanged);
+            checkBoxIsRunning.DataBindings.Add("Checked", _visionVM, "IsRunning", false, DataSourceUpdateMode.OnPropertyChanged);
+
+            // Bindings for ComplexVM nested properties
+            textBoxModelName.DataBindings.Add("Text", _complexVM.Config, "ModelName", false, DataSourceUpdateMode.OnPropertyChanged);
+            numericUpDownResX.DataBindings.Add("Value", _complexVM.Config.InternalCamera, "ResolutionX", false, DataSourceUpdateMode.OnPropertyChanged);
+
+
+            // Monitor collection changes to update the BindingList (which updates ListBox)
+            _complexVM.Logs.CollectionChanged += (s, ev) =>
+            {
+                if (ev.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+                {
+                    foreach (LogEntry item in ev.NewItems)
+                    {
+                        if (listBoxLogs.InvokeRequired)
+                            listBoxLogs.Invoke(() => bindingLogs.Add(item));
+                        else
+                            bindingLogs.Add(item);
+                    }
+                }
+            };
 
             _visionVM.PropertyChanged += (s, ev) =>
             {
@@ -83,10 +113,10 @@ public partial class Form1 : Form
                     trackBarExposure.Value = (int)_visionVM.Exposure;
             };
 
-            // ���� DataContext��ʹ XAML �ܷ������� VM
+            // 设置 DataContext，使 XAML 能访问两个 VM
             this.DataContext = new { Vision = _visionVM, Complex = _complexVM };
 
-            // 2. ���� TS Store (Debug only)
+            // 2. 生成 TS Store (Debug only)
 #if DEBUG
             var generator = new TsStoreGenerator();
             string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
@@ -94,13 +124,34 @@ public partial class Form1 : Form
             generator.Generate(frontendPath);
 #endif
 
-            // 3. ͼ����
+            // 3. 图像流
             _imageStreamManager = new ImageStreamManager();
             _imageStreamManager.OnImageRequested = (channelName) => GenerateRandomImage(640, 480);
             _imageStreamManager.Attach(webView.CoreWebView2);
 
-            // 4. ����
-            webView.CoreWebView2.Navigate("http://localhost:5173");
+            // 4. 导航
+            //webView.CoreWebView2.Navigate("http://localhost:5173");
+            // 1. 获取前端打包后的 dist 文件夹绝对物理路径
+            // 注意：如果是 WPF，通常用 AppDomain.CurrentDomain.BaseDirectory 代替 Application.StartupPath
+            string distFolderPath = Path.Combine(Application.StartupPath, "dist");
+
+            // 2. 检查文件夹是否存在（防止发布时漏掉文件导致白屏）
+            if (!Directory.Exists(distFolderPath))
+            {
+                MessageBox.Show($"找不到前端界面文件！请检查是否存在此目录：\n{distFolderPath}");
+                return;
+            }
+
+            // 3. 【核心魔法】将本地文件夹映射为虚拟域名
+            // 这样 WebView2 就会在内部拦截发往 http://hybrid.app 的请求，并将其重定向到你的本地文件夹
+            webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "hybrid.app",                         // 虚拟域名（你可以随便起，不加后缀也可以）
+                distFolderPath,                       // 映射到的本地物理路径
+                CoreWebView2HostResourceAccessKind.Allow // 允许访问资源
+            );
+
+            // 4. 让 WebView2 导航到这个虚拟域名
+            webView.CoreWebView2.Navigate("http://hybrid.app/index.html");
 
             //webView.CoreWebView2.DOMContentLoaded += (s, ev) =>
             //{

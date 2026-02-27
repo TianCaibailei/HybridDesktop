@@ -130,6 +130,115 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("    return newState;");
             sb.AppendLine("  }),");
             sb.AppendLine("}));");
+            sb.AppendLine();
+
+            // 6. Generate Command Invocation Utilities
+            sb.AppendLine("// ---- Command Invocation ----");
+            sb.AppendLine();
+            sb.AppendLine("const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();");
+            sb.AppendLine("let _commandIdCounter = 0;");
+            sb.AppendLine();
+            sb.AppendLine("// Listen for command responses from C# backend");
+            sb.AppendLine("if ((window as any).chrome?.webview) {");
+            sb.AppendLine("  (window as any).chrome.webview.addEventListener('message', (event: any) => {");
+            sb.AppendLine("    const data = event.data;");
+            sb.AppendLine("    if (data?.type === 'COMMAND_RESPONSE' && data.payload?.requestId) {");
+            sb.AppendLine("      const pending = _pendingCommands.get(data.payload.requestId);");
+            sb.AppendLine("      if (pending) {");
+            sb.AppendLine("        _pendingCommands.delete(data.payload.requestId);");
+            sb.AppendLine("        if (data.payload.success) { pending.resolve(data.payload.result); }");
+            sb.AppendLine("        else { pending.reject(new Error(data.payload.error || 'Command failed')); }");
+            sb.AppendLine("      }");
+            sb.AppendLine("    }");
+            sb.AppendLine("  });");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("function invokeCommand(vmName: string, methodName: string, args?: Record<string, any>): void {");
+            sb.AppendLine("  (window as any).chrome?.webview?.postMessage({");
+            sb.AppendLine("    type: 'COMMAND',");
+            sb.AppendLine("    payload: { vmName, methodName, args: args ?? {} }");
+            sb.AppendLine("  });");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: Record<string, any>): Promise<T> {");
+            sb.AppendLine("  const requestId = `cmd_${++_commandIdCounter}_${Date.now()}`;");
+            sb.AppendLine("  return new Promise<T>((resolve, reject) => {");
+            sb.AppendLine("    _pendingCommands.set(requestId, { resolve, reject });");
+            sb.AppendLine("    (window as any).chrome?.webview?.postMessage({");
+            sb.AppendLine("      type: 'COMMAND',");
+            sb.AppendLine("      payload: { vmName, methodName, args: args ?? {}, requestId }");
+            sb.AppendLine("    });");
+            sb.AppendLine("    // Timeout after 30 seconds");
+            sb.AppendLine("    setTimeout(() => {");
+            sb.AppendLine("      if (_pendingCommands.has(requestId)) {");
+            sb.AppendLine("        _pendingCommands.delete(requestId);");
+            sb.AppendLine("        reject(new Error(`Command ${vmName}.${methodName} timed out`));");
+            sb.AppendLine("      }");
+            sb.AppendLine("    }, 30000);");
+            sb.AppendLine("  });");
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            // 7. Generate strongly-typed command wrapper functions per ViewModel
+            foreach (var vm in viewModels)
+            {
+                var vmAttr = vm.GetCustomAttribute<SyncViewModelAttribute>();
+                var vmName = vmAttr?.Name ?? vm.Name;
+
+                var commandMethods = vm.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(m => m.GetCustomAttribute<SyncCommandAttribute>() != null)
+                    .ToList();
+
+                if (commandMethods.Count == 0) continue;
+
+                foreach (var method in commandMethods)
+                {
+                    var cmdAttr = method.GetCustomAttribute<SyncCommandAttribute>();
+                    var returnType = method.ReturnType;
+                    bool hasReturn = returnType != typeof(void);
+                    string tsReturnType = hasReturn ? MapToTsType(returnType) : "void";
+
+                    // JSDoc comment with description and parameter info
+                    sb.AppendLine("/**");
+                    if (!string.IsNullOrEmpty(cmdAttr?.Description))
+                        sb.AppendLine($" * {cmdAttr.Description}");
+                    
+                    foreach (var p in method.GetParameters())
+                    {
+                        sb.AppendLine($" * @param {p.Name} {MapToTsType(p.ParameterType)}");
+                    }
+
+                    if (hasReturn)
+                        sb.AppendLine($" * @returns Promise<{tsReturnType}>");
+
+                    sb.AppendLine(" */");
+
+                    // Build function signature
+                    var paramStrings = method.GetParameters()
+                        .Select(p => $"{p.Name}: {MapToTsType(p.ParameterType)}")
+                        .ToList();
+                    string paramsList = string.Join(", ", paramStrings);
+
+                    // Build args object
+                    var argNames = method.GetParameters().Select(p => p.Name).ToList();
+                    string argsObj = argNames.Count > 0
+                        ? "{ " + string.Join(", ", argNames) + " }"
+                        : "{}";
+
+                    if (hasReturn)
+                    {
+                        sb.AppendLine($"export function {vmName}_{method.Name}({paramsList}): Promise<{tsReturnType}> {{");
+                        sb.AppendLine($"  return invokeCommandAsync<{tsReturnType}>('{vmName}', '{method.Name}', {argsObj});");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"export function {vmName}_{method.Name}({paramsList}): void {{");
+                        sb.AppendLine($"  invokeCommand('{vmName}', '{method.Name}', {argsObj});");
+                    }
+                    sb.AppendLine("}");
+                    sb.AppendLine();
+                }
+            }
 
             var dir = Path.GetDirectoryName(outputPath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);

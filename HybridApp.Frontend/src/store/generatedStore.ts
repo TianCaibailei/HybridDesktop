@@ -120,3 +120,66 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
     return newState;
   }),
 }));
+
+// ---- Command Invocation ----
+
+const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();
+let _commandIdCounter = 0;
+
+// Listen for command responses from C# backend
+if ((window as any).chrome?.webview) {
+  (window as any).chrome.webview.addEventListener('message', (event: any) => {
+    const data = event.data;
+    if (data?.type === 'COMMAND_RESPONSE' && data.payload?.requestId) {
+      const pending = _pendingCommands.get(data.payload.requestId);
+      if (pending) {
+        _pendingCommands.delete(data.payload.requestId);
+        if (data.payload.success) { pending.resolve(data.payload.result); }
+        else { pending.reject(new Error(data.payload.error || 'Command failed')); }
+      }
+    }
+  });
+}
+
+function invokeCommand(vmName: string, methodName: string, args?: Record<string, any>): void {
+  (window as any).chrome?.webview?.postMessage({
+    type: 'COMMAND',
+    payload: { vmName, methodName, args: args ?? {} }
+  });
+}
+
+function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: Record<string, any>): Promise<T> {
+  const requestId = `cmd_${++_commandIdCounter}_${Date.now()}`;
+  return new Promise<T>((resolve, reject) => {
+    _pendingCommands.set(requestId, { resolve, reject });
+    (window as any).chrome?.webview?.postMessage({
+      type: 'COMMAND',
+      payload: { vmName, methodName, args: args ?? {}, requestId }
+    });
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      if (_pendingCommands.has(requestId)) {
+        _pendingCommands.delete(requestId);
+        reject(new Error(`Command ${vmName}.${methodName} timed out`));
+      }
+    }, 30000);
+  });
+}
+
+/**
+ * 切换运行状态
+ * @param reason string
+ */
+export function VisionVM_ToggleRunning(reason: string): void {
+  invokeCommand('VisionVM', 'ToggleRunning', { reason });
+}
+
+/**
+ * 获取当前视觉模块状态摘要
+ * @param prefix string
+ * @returns Promise<string>
+ */
+export function VisionVM_GetStatusSummary(prefix: string): Promise<string> {
+  return invokeCommandAsync<string>('VisionVM', 'GetStatusSummary', { prefix });
+}
+

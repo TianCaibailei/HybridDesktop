@@ -32,5 +32,24 @@ namespace HybridApp.Core.ViewModels
             get => _isRunning;
             set => SetProperty(ref _isRunning, value);
         }
+
+        /// <summary>
+        /// 演示无返回值的命令：切换运行状态
+        /// </summary>
+        [SyncCommand(Description = "切换运行状态")]
+        public void ToggleRunning(string reason)
+        {
+            IsRunning = !IsRunning;
+            System.Diagnostics.Debug.WriteLine($"[Command] ToggleRunning called, reason: {reason}, IsRunning={IsRunning}");
+        }
+
+        /// <summary>
+        /// 演示有返回值的命令：获取当前状态摘要
+        /// </summary>
+        [SyncCommand(Description = "获取当前视觉模块状态摘要")]
+        public string GetStatusSummary(string prefix)
+        {
+            return $"{prefix}: Exposure={Exposure}, Gain={Gain}, IsRunning={IsRunning}";
+        }
     }
 }

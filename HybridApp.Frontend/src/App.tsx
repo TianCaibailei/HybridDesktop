@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
-import { useAppStore } from './store/generatedStore';
+import { useAppStore, VisionVM_ToggleRunning, VisionVM_GetStatusSummary } from './store/generatedStore';
 import { ImageStream } from './components/ImageStream';
 import { useSharedBuffer } from './hooks/useSharedBuffer';
 
@@ -14,6 +14,16 @@ function App() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { getActiveData, tick } = useSharedBuffer("sine-wave");
+
+  // Command Demo State
+  const [toggleReason, setToggleReason] = useState('user-click');
+  const [summaryPrefix, setSummaryPrefix] = useState('STATUS');
+  const [summaryResult, setSummaryResult] = useState('');
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [commandLog, setCommandLog] = useState<string[]>([]);
+
+  const appendLog = (msg: string) =>
+    setCommandLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 20));
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -217,6 +227,90 @@ function App() {
       <div className="card" style={{ background: '#1e1e1e', borderRadius: '12px', padding: '20px', border: '1px solid #333' }}>
         <h2 style={{ borderBottom: '2px solid #00ff41', paddingBottom: '10px', marginTop: 0 }}>SharedBuffer Data</h2>
         <canvas ref={canvasRef} width={600} height={250} style={{ width: '100%', border: '1px solid #333', display: 'block', borderRadius: '8px' }} />
+      </div>
+
+      {/* SyncCommand Demo Panel */}
+      <div className="card" style={{ gridColumn: 'span 2', background: '#1a1a2e', borderRadius: '12px', padding: '20px', border: '1px solid #7c4dff' }}>
+        <h2 style={{ borderBottom: '2px solid #7c4dff', paddingBottom: '10px', marginTop: 0, color: '#b388ff' }}>
+          ⚡ SyncCommand Demo — Frontend → C# Method Invocation
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', alignItems: 'start' }}>
+
+          {/* Void Command: ToggleRunning */}
+          <div style={{ background: '#252540', padding: '16px', borderRadius: '10px', border: '1px solid #5c6bc0' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '14px', color: '#9fa8da' }}>void Command — ToggleRunning</h3>
+            <label style={{ fontSize: '12px', color: '#777', display: 'block', marginBottom: '4px' }}>切换原因 (reason)</label>
+            <input
+              type="text"
+              value={toggleReason}
+              onChange={e => setToggleReason(e.target.value)}
+              style={{ width: '100%', background: '#1a1a2e', border: '1px solid #444', color: '#e0e0e0', padding: '6px 10px', borderRadius: '6px', boxSizing: 'border-box', marginBottom: '12px' }}
+            />
+            <button
+              style={{ width: '100%', padding: '10px', background: '#5c6bc0', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}
+              onClick={() => {
+                VisionVM_ToggleRunning(toggleReason);
+                appendLog(`→ ToggleRunning("${toggleReason}") sent — void, no return`);
+              }}
+            >
+              Call ToggleRunning()
+            </button>
+            <p style={{ fontSize: '11px', color: '#666', marginTop: '8px', marginBottom: 0 }}>
+              无返回值，IsRunning 状态会立即通过数据同步反映在 Vision Parameters 面板中
+            </p>
+          </div>
+
+          {/* Async Command: GetStatusSummary with return value */}
+          <div style={{ background: '#252540', padding: '16px', borderRadius: '10px', border: '1px solid #00bcd4' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '14px', color: '#80deea' }}>async Command — GetStatusSummary</h3>
+            <label style={{ fontSize: '12px', color: '#777', display: 'block', marginBottom: '4px' }}>前缀 (prefix)</label>
+            <input
+              type="text"
+              value={summaryPrefix}
+              onChange={e => setSummaryPrefix(e.target.value)}
+              style={{ width: '100%', background: '#1a1a2e', border: '1px solid #444', color: '#e0e0e0', padding: '6px 10px', borderRadius: '6px', boxSizing: 'border-box', marginBottom: '12px' }}
+            />
+            <button
+              disabled={summaryLoading}
+              style={{ width: '100%', padding: '10px', background: summaryLoading ? '#333' : '#00838f', color: '#fff', border: 'none', borderRadius: '6px', cursor: summaryLoading ? 'not-allowed' : 'pointer', fontWeight: 'bold' }}
+              onClick={async () => {
+                setSummaryLoading(true);
+                setSummaryResult('');
+                try {
+                  appendLog(`→ GetStatusSummary("${summaryPrefix}") sent, awaiting Promise...`);
+                  const result = await VisionVM_GetStatusSummary(summaryPrefix);
+                  setSummaryResult(result);
+                  appendLog(`← GetStatusSummary returned: "${result}"`);
+                } catch (e: any) {
+                  setSummaryResult(`Error: ${e.message}`);
+                  appendLog(`✗ GetStatusSummary failed: ${e.message}`);
+                } finally {
+                  setSummaryLoading(false);
+                }
+              }}
+            >
+              {summaryLoading ? 'Waiting for C# response...' : 'Call GetStatusSummary()'}
+            </button>
+            {summaryResult && (
+              <div style={{ marginTop: '10px', background: '#1a1a2e', padding: '8px 12px', borderRadius: '6px', border: '1px solid #00bcd4', fontSize: '13px', color: '#80deea', wordBreak: 'break-all' }}>
+                <b>返回值：</b> {summaryResult}
+              </div>
+            )}
+          </div>
+
+          {/* Command Log */}
+          <div style={{ background: '#0d0d1a', padding: '16px', borderRadius: '10px', border: '1px solid #37474f' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '14px', color: '#78909c' }}>Command Log</h3>
+            <div style={{ height: '148px', overflowY: 'auto', fontFamily: 'monospace', fontSize: '11px', color: '#aaa', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              {commandLog.length === 0
+                ? <span style={{ color: '#444' }}>No commands yet...</span>
+                : commandLog.map((line, i) => (
+                  <div key={i} style={{ color: line.startsWith('[') && line.includes('←') ? '#80deea' : line.includes('✗') ? '#ef9a9a' : '#aaa' }}>{line}</div>
+                ))
+              }
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`
