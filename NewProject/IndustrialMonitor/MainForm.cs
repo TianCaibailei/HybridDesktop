@@ -12,6 +12,7 @@ public partial class MainForm : Form
     private MonitorVM _monitorVM = new MonitorVM();
     private TurntableVM _turntableVM = new TurntableVM();
     private CncPathVM _cncPathVM = new CncPathVM();
+    private MaterialVM _materialVM = new MaterialVM();
 
     public MainForm()
     {
@@ -53,16 +54,17 @@ public partial class MainForm : Form
         _vmManager.Register(_monitorVM);
         _vmManager.Register(_turntableVM);
         _vmManager.Register(_cncPathVM);
+        _vmManager.Register(_materialVM);
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG
-        //var generator = new TsStoreGenerator();
-        //string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
-        //string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
-        //if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
-        //{
-        //    generator.Generate(frontendPath, typeof(Program).Assembly);
-        //}
+        var generator = new TsStoreGenerator();
+        string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
+        string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
+        if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
+        {
+            generator.Generate(frontendPath, typeof(Program).Assembly);
+        }
 #endif
 
         // 4. 设置虚拟域名映射

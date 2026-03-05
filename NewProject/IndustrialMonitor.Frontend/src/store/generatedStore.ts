@@ -17,6 +17,16 @@ export interface CncPathVM {
 }
 
 /**
+ * 物料信息展示数据层
+ */
+export interface MaterialVM {
+  /**
+   * 各个工位的物料详情集合
+   */
+  materials: any;
+}
+
+/**
  * 生产监控指标数据，包含投入产出、运行时间和稼动率等
  */
 export interface MonitorVM {
@@ -80,6 +90,61 @@ export interface TurntableVM {
   rotateDirection: number;
 }
 
+export interface MaterialItem {
+  /**
+   * 工位状态
+   */
+  stationState: string;
+  /**
+   * 工位序号
+   */
+  station: number;
+  /**
+   * 优先级
+   */
+  priority: string;
+  /**
+   * 毛长
+   */
+  blankLength: number;
+  /**
+   * 毛宽
+   */
+  blankWidth: number;
+  /**
+   * 加工文件
+   */
+  ncFile: string;
+  /**
+   * 分中
+   */
+  centerDivide: number;
+  /**
+   * 偏值Z
+   */
+  offsetZ: number;
+  /**
+   * 角度
+   */
+  angle: number;
+  /**
+   * 产品长
+   */
+  productLength: number;
+  /**
+   * 产品宽
+   */
+  productWidth: number;
+  /**
+   * 阵列数
+   */
+  arrayCount: number;
+  /**
+   * 阵列间
+   */
+  arraySpacing: number;
+}
+
 export interface StationItem {
   /**
    * 工位状态（0=空闲,1=待加工,2=加工中,3=加工完成,4=未知）
@@ -96,6 +161,10 @@ export interface AppState {
    * CNC刀具路径控制，管理NC文件的加载和切换
    */
   cncPathVM: CncPathVM;
+  /**
+   * 物料信息展示数据层
+   */
+  materialVM: MaterialVM;
   /**
    * 生产监控指标数据，包含投入产出、运行时间和稼动率等
    */
@@ -114,6 +183,7 @@ export interface AppActions {
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
   cncPathVM: {} as CncPathVM,
+  materialVM: {} as MaterialVM,
   monitorVM: {} as MonitorVM,
   turntableVM: {} as TurntableVM,
   updateStateFromBackend: (vmName, propName, value) => set((state) => {
