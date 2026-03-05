@@ -1,5 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading;
+using System.Windows.Forms;
 using HybridApp.Core.Attributes;
 using HybridApp.Core.ViewModels;
 
@@ -98,6 +100,32 @@ namespace IndustrialMonitor.ViewModels
         {
             get => _materials;
             set => SetProperty(ref _materials, value);
+        }
+
+        [SyncCommand(Description = "弹出文件选择对话框选择NC文件")]
+        public string SelectNcFile()
+        {
+            string selectedPath = null;
+            
+            // OpenFileDialog must run in STA thread
+            var thread = new Thread(() =>
+            {
+                using (var ofd = new OpenFileDialog())
+                {
+                    ofd.Filter = "NC Files (*.nc)|*.nc|All Files (*.*)|*.*";
+                    ofd.Title = "Select NC File";
+                    if (ofd.ShowDialog() == DialogResult.OK)
+                    {
+                        selectedPath = ofd.FileName;
+                    }
+                }
+            });
+            
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            return selectedPath ?? string.Empty;
         }
     }
 }

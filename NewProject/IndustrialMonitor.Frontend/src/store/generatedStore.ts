@@ -194,9 +194,33 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   }),
   setBackendState: (vmName, propName, value) => {
     const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
-    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
-    // 1. Update Local Store
-    set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));
+    const isPath = propName.includes('.') || propName.includes('[');
+    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)
+    if (!isPath) {
+      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
+      set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));
+    } else {
+      // Support deep property update locally using mutative approach to avoid complex lodash.set in generated code
+      // Alternatively backend's subsequent STATE_SYNC will overwrite this with the final data.
+      set((state) => {
+         const newState = { ...state };
+         const vmState = { ...(newState as any)[stateKey] };
+         // Basic path parser for local immediate response
+         let current: any = vmState;
+         const parts = propName.split(/[.\]\[]/g).filter(Boolean);
+         for (let i = 0; i < parts.length - 1; i++) {
+             const p = parts[i];
+             // lower case first level if needed
+             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;
+             if (current[key] !== undefined) current = current[key];
+         }
+         const lastPart = parts[parts.length - 1];
+         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;
+         current[lastKey] = value;
+         newState[stateKey as keyof AppState] = vmState as any;
+         return newState;
+      });
+    }
     // 2. Push to C# Backend
     if ((window as any).chrome?.webview) {
       (window as any).chrome.webview.postMessage({
@@ -267,6 +291,14 @@ function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: 
  */
 export function CncPathVM_LoadNcFile(filePath: string): Promise<string> {
   return invokeCommandAsync<string>('CncPathVM', 'LoadNcFile', { filePath });
+}
+
+/**
+ * 弹出文件选择对话框选择NC文件
+ * @returns Promise<string>
+ */
+export function MaterialVM_SelectNcFile(): Promise<string> {
+  return invokeCommandAsync<string>('MaterialVM', 'SelectNcFile', {});
 }
 
 /**

@@ -1,11 +1,35 @@
 import { useState } from 'react';
-import { useAppStore, MaterialItem } from '../store/generatedStore';
+import { useAppStore, MaterialItem, MaterialVM_SelectNcFile } from '../store/generatedStore';
 import { LayoutGrid, List } from 'lucide-react';
 
 export default function MaterialPage() {
     const materialVM = useAppStore(s => s.materialVM);
     const materials: MaterialItem[] = materialVM?.materials || [];
     const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+
+    const setBackendState = useAppStore(s => s.setBackendState);
+
+    const handlePriorityChange = (index: number, newPriority: string) => {
+        setBackendState('MaterialVM', `Materials[${index}].Priority`, newPriority);
+    };
+
+    const handleNumberChange = (index: number, field: string, value: string) => {
+        const num = parseFloat(value);
+        if (!isNaN(num)) {
+            setBackendState('MaterialVM', `Materials[${index}].${field}`, num);
+        }
+    };
+
+    const handleSelectFile = async (index: number) => {
+        try {
+            const filePath = await MaterialVM_SelectNcFile();
+            if (filePath && filePath.trim() !== '') {
+                setBackendState('MaterialVM', `Materials[${index}].NcFile`, filePath);
+            }
+        } catch (e) {
+            console.error("Failed to select file", e);
+        }
+    };
 
     return (
         <div className="w-full h-full flex flex-col bg-slate-900 overflow-hidden relative">
@@ -61,10 +85,45 @@ export default function MaterialPage() {
                                             </span>
                                         </td>
                                         <td className="px-4 py-2.5 border-b border-slate-800/60 font-mono text-indigo-400">{m.station}</td>
-                                        <td className="px-4 py-2.5 border-b border-slate-800/60 text-amber-500 whitespace-nowrap">{m.priority}</td>
-                                        <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">{m.blankLength}</td>
-                                        <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">{m.blankWidth}</td>
-                                        <td className="px-4 py-2.5 border-b border-slate-800/60 font-medium text-emerald-400" title={m.ncFile}>{m.ncFile}</td>
+                                        <td className="px-4 py-2.5 border-b border-slate-800/60 whitespace-nowrap">
+                                            <select
+                                                className="bg-slate-800 text-amber-500 border border-slate-600 rounded px-2 py-1 outline-none focus:border-indigo-500"
+                                                value={m.priority}
+                                                onChange={(e) => handlePriorityChange(i, e.target.value)}
+                                            >
+                                                <option value="★">★</option>
+                                                <option value="★★">★★</option>
+                                                <option value="★★★">★★★</option>
+                                                <option value="★★★★">★★★★</option>
+                                                <option value="★★★★★">★★★★★</option>
+                                            </select>
+                                        </td>
+                                        <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">
+                                            <input
+                                                type="number"
+                                                className="w-16 bg-slate-800 text-slate-200 border border-slate-700/50 rounded px-2 py-1 outline-none focus:border-indigo-500 no-spinners"
+                                                defaultValue={m.blankLength}
+                                                onBlur={(e) => handleNumberChange(i, 'BlankLength', e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleNumberChange(i, 'BlankLength', (e.target as HTMLInputElement).value)}
+                                            />
+                                        </td>
+                                        <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">
+                                            <input
+                                                type="number"
+                                                className="w-16 bg-slate-800 text-slate-200 border border-slate-700/50 rounded px-2 py-1 outline-none focus:border-indigo-500 no-spinners"
+                                                defaultValue={m.blankWidth}
+                                                onBlur={(e) => handleNumberChange(i, 'BlankWidth', e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleNumberChange(i, 'BlankWidth', (e.target as HTMLInputElement).value)}
+                                            />
+                                        </td>
+                                        <td className="px-4 py-2.5 border-b border-slate-800/60 font-medium text-emerald-400 max-w-[200px]" title={m.ncFile}>
+                                            <div className="flex items-center gap-2">
+                                                <span className="truncate">{m.ncFile}</span>
+                                                <button onClick={() => handleSelectFile(i)} className="p-1 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors">
+                                                    ...
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">{m.centerDivide}</td>
                                         <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">{m.offsetZ}</td>
                                         <td className="px-4 py-2.5 border-b border-slate-800/60 text-slate-300">{m.angle}</td>
@@ -89,12 +148,27 @@ export default function MaterialPage() {
                                     <span className={`px-2 py-0.5 rounded text-xs px-2 font-medium ${m.stationState === '空' ? 'bg-slate-700 text-slate-300' : 'bg-green-900/40 text-green-400 border border-green-800/50'}`}>
                                         状态: {m.stationState}
                                     </span>
-                                    <span className="text-amber-500 text-sm font-bold tracking-widest">{m.priority}</span>
+                                    <select
+                                        className="bg-transparent text-amber-500 text-sm font-bold tracking-widest outline-none cursor-pointer hover:bg-slate-800 rounded px-1"
+                                        value={m.priority}
+                                        onChange={(e) => handlePriorityChange(i, e.target.value)}
+                                    >
+                                        <option value="★" className="bg-slate-800">★</option>
+                                        <option value="★★" className="bg-slate-800">★★</option>
+                                        <option value="★★★" className="bg-slate-800">★★★</option>
+                                        <option value="★★★★" className="bg-slate-800">★★★★</option>
+                                        <option value="★★★★★" className="bg-slate-800">★★★★★</option>
+                                    </select>
                                 </div>
 
                                 {/* 重要信息项高亮显示 */}
-                                <div className="bg-slate-900/50 rounded-lg p-2.5 mb-3 border border-slate-700/50">
-                                    <div className="text-[11px] text-slate-500 uppercase font-semibold mb-1">NC 文件</div>
+                                <div className="bg-slate-900/50 rounded-lg p-2.5 mb-3 border border-slate-700/50 group/file">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <div className="text-[11px] text-slate-500 uppercase font-semibold">NC 文件</div>
+                                        <button onClick={() => handleSelectFile(i)} className="text-[10px] bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white px-2 py-0.5 rounded transition-colors opacity-0 group-hover/file:opacity-100">
+                                            更换
+                                        </button>
+                                    </div>
                                     <div className="text-emerald-400 text-sm font-medium leading-snug break-words line-clamp-2" title={m.ncFile}>
                                         {m.ncFile}
                                     </div>
