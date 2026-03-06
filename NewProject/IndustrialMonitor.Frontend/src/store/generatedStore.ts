@@ -57,6 +57,28 @@ export interface MonitorVM {
 }
 
 /**
+ * 刀具管理数据模型
+ */
+export interface ToolVM {
+  /**
+   * 36把刀的集合
+   */
+  tools: any;
+  /**
+   * 是否拥有寿命管理模块权限
+   */
+  hasLifeModule: boolean;
+  /**
+   * 是否拥有对刀管理模块权限
+   */
+  hasCalibrationModule: boolean;
+  /**
+   * 是否拥有刀补管理模块权限
+   */
+  hasCompensationModule: boolean;
+}
+
+/**
  * 矩形转盘控制，支持X/Y方向独立工位数和旋转方向控制
  */
 export interface TurntableVM {
@@ -150,6 +172,53 @@ export interface FormResult {
   message: string;
 }
 
+export interface ToolItem {
+  /**
+   * 刀号
+   */
+  id: number;
+  /**
+   * 别名
+   */
+  name: string;
+  /**
+   * 寿命上限 (小时)
+   */
+  maxLifetime: number;
+  /**
+   * 当前已使用时长 (小时)
+   */
+  usedLifetime: number;
+  /**
+   * 已切换次数
+   */
+  switchCount: number;
+  /**
+   * 最大允许切换次数
+   */
+  maxSwitchCount: number;
+  /**
+   * 上一次更换刀具时间
+   */
+  lastReplacedAt: string;
+  /**
+   * 上一次对刀时间
+   */
+  lastCalibratedAt: string;
+  /**
+   * 对刀时间间隔 (小时)
+   */
+  calibrationInterval: number;
+  /**
+   * 刀补D (全局)
+   */
+  compensationD: number;
+  /**
+   * 刀补H (全局)
+   */
+  compensationH: number;
+}
+
 export interface StationItem {
   /**
    * 工位状态（0=空闲,1=待加工,2=加工中,3=加工完成,4=未知）
@@ -175,6 +244,10 @@ export interface AppState {
    */
   monitorVM: MonitorVM;
   /**
+   * 刀具管理数据模型
+   */
+  toolVM: ToolVM;
+  /**
    * 矩形转盘控制，支持X/Y方向独立工位数和旋转方向控制
    */
   turntableVM: TurntableVM;
@@ -190,6 +263,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   cncPathVM: {} as CncPathVM,
   materialVM: {} as MaterialVM,
   monitorVM: {} as MonitorVM,
+  toolVM: {} as ToolVM,
   turntableVM: {} as TurntableVM,
   updateStateFromBackend: (vmName, propName, value) => set((state) => {
     const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
@@ -330,6 +404,35 @@ export function MaterialVM_ApplyMaterialChanges(stationIndex: number, draftData:
  */
 export function MaterialVM_PasteMaterialChanges(stationIndices: number[], templateData: MaterialItem): Promise<FormResult> {
   return invokeCommandAsync<FormResult>('MaterialVM', 'PasteMaterialChanges', { stationIndices, templateData });
+}
+
+/**
+ * 修改指定刀具的各项可编辑参数
+ * @param index number
+ * @param draftData ToolItem
+ * @returns Promise<FormResult>
+ */
+export function ToolVM_ApplyToolChanges(index: number, draftData: ToolItem): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('ToolVM', 'ApplyToolChanges', { index, draftData });
+}
+
+/**
+ * 批量粘贴并应用多个刀具的数据
+ * @param indices number[]
+ * @param templateData ToolItem
+ * @returns Promise<FormResult>
+ */
+export function ToolVM_PasteToolChanges(indices: number[], templateData: ToolItem): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('ToolVM', 'PasteToolChanges', { indices, templateData });
+}
+
+/**
+ * 批量手动对刀，更新最后对刀时间
+ * @param indices number[]
+ * @returns Promise<FormResult>
+ */
+export function ToolVM_CalibrateTools(indices: number[]): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('ToolVM', 'CalibrateTools', { indices });
 }
 
 /**

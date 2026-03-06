@@ -13,6 +13,7 @@ public partial class MainForm : Form
     private TurntableVM _turntableVM = new TurntableVM();
     private CncPathVM _cncPathVM = new CncPathVM();
     private MaterialVM _materialVM = new MaterialVM();
+    private ToolVM _toolVM = new ToolVM();
 
     public MainForm()
     {
@@ -55,6 +56,7 @@ public partial class MainForm : Form
         _vmManager.Register(_turntableVM);
         _vmManager.Register(_cncPathVM);
         _vmManager.Register(_materialVM);
+        _vmManager.Register(_toolVM);
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG
@@ -104,11 +106,9 @@ public partial class MainForm : Form
         // 5. 导航到主页面
         webView.CoreWebView2.Navigate("http://industrial-monitor.app/index.html");
 
-        // 6. 发送全量状态
-        webView.CoreWebView2.DOMContentLoaded += (s, ev) =>
-        {
-            _vmManager.SendFullState();
-        };
+        // 6. 移除旧的后端主动推送状态逻辑
+        // 因为 WebView 导航完成时，前端 React JS 可能还没挂载，从而造成数据丢失。
+        // 现在改为前端挂载 useEffect 后通过 POST INIT_REQUEST 主动向后端拉取（见 App.tsx）。
     }
 
     private void btnLoadNc_Click(object sender, EventArgs e)

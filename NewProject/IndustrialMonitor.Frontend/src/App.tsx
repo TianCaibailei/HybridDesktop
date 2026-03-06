@@ -2,14 +2,15 @@ import CncViewer from './components/CncViewer';
 import RectTurntable from './components/RectTurntable';
 import ProductionBoard from './components/ProductionBoard';
 import MaterialPage from './pages/MaterialPage';
-import { Cpu, LayoutDashboard, List } from 'lucide-react';
+import ToolPage from './pages/ToolPage';
+import { Cpu, LayoutDashboard, List, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/generatedStore';
 
 export default function App() {
     const updateStateFromBackend = useAppStore(s => s.updateStateFromBackend);
     const initFullState = useAppStore(s => s.initFullState);
-    const [currentRoute, setCurrentRoute] = useState<'monitor' | 'material'>('monitor');
+    const [currentRoute, setCurrentRoute] = useState<'monitor' | 'material' | 'tool'>('monitor');
 
     useEffect(() => {
         if ((window as any).chrome?.webview) {
@@ -22,6 +23,8 @@ export default function App() {
                 }
             };
             (window as any).chrome.webview.addEventListener('message', handler);
+            // 注册完监听器后，主动向后端请求同步全量数据，解决 F5 刷新时序问题
+            (window as any).chrome.webview.postMessage({ type: 'INIT_REQUEST' });
             return () => (window as any).chrome.webview.removeEventListener('message', handler);
         }
     }, [updateStateFromBackend, initFullState]);
@@ -51,6 +54,12 @@ export default function App() {
                     >
                         <List size={16} /> 物料信息
                     </button>
+                    <button
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${currentRoute === 'tool' ? 'bg-slate-700 text-white shadow-sm ring-1 ring-slate-600' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'}`}
+                        onClick={() => setCurrentRoute('tool')}
+                    >
+                        <Wrench size={16} /> 设备刀具
+                    </button>
                 </div>
 
                 <div className="flex-1" />
@@ -69,7 +78,7 @@ export default function App() {
                         </div>
 
                         {/* 右侧: 上下布局 (上矩形转盘，下生产看板) */}
-                        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
+                        <div className="flex justify-start flex-col gap-4 min-h-0 overflow-hidden">
                             {/* 矩形转盘 */}
                             <div className="flex-1 shrink-0 overflow-auto flex items-center justify-center">
                                 <RectTurntable />
@@ -81,10 +90,16 @@ export default function App() {
                             </div>
                         </div>
                     </div>
-                ) : (
+                ) : currentRoute === 'material' ? (
                     <div className="w-full h-full p-4">
                         <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50">
                             <MaterialPage />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="w-full h-full p-4">
+                        <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50">
+                            <ToolPage />
                         </div>
                     </div>
                 )}

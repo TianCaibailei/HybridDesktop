@@ -212,6 +212,17 @@ export default function RectTurntable() {
             <div className="relative bg-slate-900/80 rounded-xl overflow-hidden shadow-inner border border-slate-800/50 flex items-center justify-center"
                 style={{ width: viewW, height: viewH }}>
 
+                {/* 状态图例 */}
+                <div className="absolute w-full mt-3 flex items-center justify-center gap-3 text-[10px]"
+                    style={{ left: TRACK_W * 0.5 - 230, bottom: 0 }}>
+                    {STATION_STATES.map(s => (
+                        <div key={s.id} className="flex items-center gap-1">
+                            <div className={`w-2.5 h-2.5 rounded-sm border ${s.color}`} />
+                            <span className="text-slate-500">{s.text}</span>
+                        </div>
+                    ))}
+                </div>
+
                 {/* 中心信息岛 */}
                 <div className="absolute bg-slate-800 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.5)] border border-slate-700 flex flex-col items-center justify-center"
                     style={{ width: TRACK_W * 0.45, height: TRACK_H * 0.45 }}>
@@ -284,15 +295,7 @@ export default function RectTurntable() {
                 </div>
             </div>
 
-            {/* 状态图例 */}
-            <div className="w-full mt-3 flex items-center justify-center gap-3 text-[10px]">
-                {STATION_STATES.map(s => (
-                    <div key={s.id} className="flex items-center gap-1">
-                        <div className={`w-2.5 h-2.5 rounded-sm border ${s.color}`} />
-                        <span className="text-slate-500">{s.text}</span>
-                    </div>
-                ))}
-            </div>
+
         </div>
     );
 }

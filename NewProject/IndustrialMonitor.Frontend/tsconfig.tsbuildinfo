@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/cncviewer.tsx","./src/components/productionboard.tsx","./src/components/rectturntable.tsx","./src/pages/materialpage.tsx","./src/store/generatedstore.ts"],"version":"5.8.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/cncviewer.tsx","./src/components/productionboard.tsx","./src/components/rectturntable.tsx","./src/pages/materialpage.tsx","./src/pages/toolpage.tsx","./src/store/generatedstore.ts"],"version":"5.8.3"}
