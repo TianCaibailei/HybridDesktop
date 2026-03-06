@@ -13,7 +13,7 @@ const STATION_STATES = [
 
 // 工位卡片组件（只展示，不允许手动点击切换）
 const StationCard = ({ name, statusObj }: { name: string; statusObj: typeof STATION_STATES[0] }) => (
-    <div className={`w-14 h-14 rounded-lg border-2 shadow-[0_0_12px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center relative z-10 transition-colors duration-300 ${statusObj.color}`}>
+    <div className={`w-14 h-14 rounded-2xl border-2 shadow-[0_0_12px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center relative z-10 transition-colors duration-300 ${statusObj.color}`}>
         <span className="text-[11px] font-bold mb-0.5 tracking-wider">{name}</span>
         <span className="text-[9px] px-1 py-0.5 rounded font-semibold bg-slate-900/80 backdrop-blur-sm whitespace-nowrap">
             {statusObj.text}

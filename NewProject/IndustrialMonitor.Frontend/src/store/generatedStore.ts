@@ -82,6 +82,10 @@ export interface MachineVM {
    * 当前提示的详情内容
    */
   currentInfo: AlarmPayload;
+  /**
+   * 用户Sqlite本地数据库路径
+   */
+  sqliteDbPath: string;
 }
 
 /**
@@ -122,6 +126,12 @@ export interface MonitorVM {
    * 是否正在生产
    */
   isRunning: boolean;
+}
+
+/**
+ * 生产数据统计及历史查询ViewModel
+ */
+export interface ProduceDataVM {
 }
 
 /**
@@ -247,6 +257,20 @@ export interface FormResult {
   message: string;
 }
 
+export interface ProduceData {
+  fileName: string;
+  count: number;
+  startTime: string;
+  endTime: string;
+  timeSpanMinute: number;
+}
+
+export interface DailyProduceStat {
+  dateString: string;
+  totalCount: number;
+  averageTimeSpan: number;
+}
+
 export interface ToolItem {
   /**
    * 刀号
@@ -327,6 +351,10 @@ export interface AppState {
    */
   monitorVM: MonitorVM;
   /**
+   * 生产数据统计及历史查询ViewModel
+   */
+  produceDataVM: ProduceDataVM;
+  /**
    * 刀具管理数据模型
    */
   toolVM: ToolVM;
@@ -348,6 +376,7 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   machineVM: {} as MachineVM,
   materialVM: {} as MaterialVM,
   monitorVM: {} as MonitorVM,
+  produceDataVM: {} as ProduceDataVM,
   toolVM: {} as ToolVM,
   turntableVM: {} as TurntableVM,
   updateStateFromBackend: (vmName, propName, value) => set((state) => {
@@ -560,6 +589,33 @@ export function onMonitorVM_UtilizationWarning(callback: (args: string) => void)
       if (subs.size === 0) _eventSubscribers.delete(key);
     }
   };
+}
+
+/**
+ * 根据时间范围查询班次/详细的生产数据记录
+ * @param startTime string
+ * @param endTime string
+ * @returns Promise<ProduceData[]>
+ */
+export function ProduceDataVM_QueryProduceData(startTime: string, endTime: string): Promise<ProduceData[]> {
+  return invokeCommandAsync<ProduceData[]>('ProduceDataVM', 'QueryProduceData', { startTime, endTime });
+}
+
+/**
+ * 查询指定时间范围内每天的加工数量统计，用于图表展示
+ * @param startTime string
+ * @param endTime string
+ * @returns Promise<DailyProduceStat[]>
+ */
+export function ProduceDataVM_QueryDailyStatistics(startTime: string, endTime: string): Promise<DailyProduceStat[]> {
+  return invokeCommandAsync<DailyProduceStat[]>('ProduceDataVM', 'QueryDailyStatistics', { startTime, endTime });
+}
+
+/**
+ * 用于调试：初始化自动生成假数据避免表不存在
+ */
+export function ProduceDataVM_MockInitDataIfTableNotExists(): void {
+  invokeCommand('ProduceDataVM', 'MockInitDataIfTableNotExists', {});
 }
 
 /**

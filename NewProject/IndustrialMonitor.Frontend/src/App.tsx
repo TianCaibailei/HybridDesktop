@@ -4,15 +4,16 @@ import ProductionBoard from './components/ProductionBoard';
 import CncStatusCard from './components/CncStatusCard';
 import MaterialPage from './pages/MaterialPage';
 import ToolPage from './pages/ToolPage';
+import DataStatisticsPage from './pages/DataStatisticsPage';
 import GlobalAlert from './components/GlobalAlert';
-import { Cpu, LayoutDashboard, List, Wrench } from 'lucide-react';
+import { Cpu, LayoutDashboard, List, Wrench, BarChart2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/generatedStore';
 
 export default function App() {
     const updateStateFromBackend = useAppStore(s => s.updateStateFromBackend);
     const initFullState = useAppStore(s => s.initFullState);
-    const [currentRoute, setCurrentRoute] = useState<'monitor' | 'material' | 'tool'>('monitor');
+    const [currentRoute, setCurrentRoute] = useState<'monitor' | 'material' | 'tool' | 'statistics'>('monitor');
 
     useEffect(() => {
         if ((window as any).chrome?.webview) {
@@ -64,6 +65,12 @@ export default function App() {
                     >
                         <Wrench size={16} /> 设备刀具
                     </button>
+                    <button
+                        className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer ${currentRoute === 'statistics' ? 'bg-slate-700 text-white shadow-sm ring-1 ring-slate-600' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/80'}`}
+                        onClick={() => setCurrentRoute('statistics')}
+                    >
+                        <BarChart2 size={16} /> 数据统计
+                    </button>
                 </div>
 
                 <div className="flex-1" />
@@ -101,10 +108,16 @@ export default function App() {
                             <MaterialPage />
                         </div>
                     </div>
-                ) : (
+                ) : currentRoute === 'tool' ? (
                     <div className="w-full h-full p-4">
                         <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50">
                             <ToolPage />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="w-full h-full p-4">
+                        <div className="w-full h-full rounded-2xl overflow-hidden shadow-2xl border border-slate-700/50">
+                            <DataStatisticsPage />
                         </div>
                     </div>
                 )}

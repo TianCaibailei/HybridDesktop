@@ -20,6 +20,8 @@ namespace IndustrialMonitor.ViewModels
         private AlarmPayload? _currentAlarm;
         private AlarmPayload? _currentInfo;
 
+        private string _sqliteDbPath = @"D:\Projects\TJ_V240_New\tj_v240t\Lib\DbData\Products.db";
+
         public MachineVM() : base("MachineVM") { }
 
         [SyncProperty(Description = "当前是否存在未清除的报警")]
@@ -48,6 +50,13 @@ namespace IndustrialMonitor.ViewModels
         {
             get => _currentInfo;
             set => SetProperty(ref _currentInfo, value);
+        }
+
+        [SyncProperty(Description = "用户Sqlite本地数据库路径")]
+        public string SqliteDbPath
+        {
+            get => _sqliteDbPath;
+            set => SetProperty(ref _sqliteDbPath, value);
         }
 
         [SyncEvent(Description = "当机器发生新报警时触发")]

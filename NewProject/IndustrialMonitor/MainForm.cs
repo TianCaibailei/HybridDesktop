@@ -16,10 +16,12 @@ public partial class MainForm : Form
     private ToolVM _toolVM = new ToolVM();
     private MachineVM _machineVM = new MachineVM();
     private CncStatusVM _cncStatusVM = new CncStatusVM();
-
+    private ProduceDataVM _produceDataVM;
+    
     public MainForm()
     {
         InitializeComponent();
+        _produceDataVM = new ProduceDataVM(_machineVM);
         // 关键步骤：注册 CodePages 编码提供程序
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
@@ -61,6 +63,7 @@ public partial class MainForm : Form
         _vmManager.Register(_toolVM);
         _vmManager.Register(_machineVM);
         _vmManager.Register(_cncStatusVM);
+        _vmManager.Register(_produceDataVM);
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG

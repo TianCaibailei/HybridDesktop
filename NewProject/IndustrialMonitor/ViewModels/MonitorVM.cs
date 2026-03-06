@@ -51,10 +51,10 @@ namespace IndustrialMonitor.ViewModels
             {
                 if (SetProperty(ref _utilization, value))
                 {
-                    if (value < 80 && value > 0)
-                    {
-                        UtilizationWarning?.Invoke(this, $"注意：当前稼动率已降至 {value}%，请检查生产线状态！");
-                    }
+                    //if (value < 80 && value > 0)
+                    //{
+                    //    UtilizationWarning?.Invoke(this, $"注意：当前稼动率已降至 {value}%，请检查生产线状态！");
+                    //}
                 }
             }
         }
