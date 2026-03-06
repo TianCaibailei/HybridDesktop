@@ -329,7 +329,10 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
 const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();
 let _commandIdCounter = 0;
 
-// Listen for command responses from C# backend
+// ---- Event Subscriptions ----
+const _eventSubscribers = new Map<string, Set<(args: any) => void>>();
+
+// Listen for messages from C# backend
 if ((window as any).chrome?.webview) {
   (window as any).chrome.webview.addEventListener('message', (event: any) => {
     const data = event.data;
@@ -339,6 +342,14 @@ if ((window as any).chrome?.webview) {
         _pendingCommands.delete(data.payload.requestId);
         if (data.payload.success) { pending.resolve(data.payload.result); }
         else { pending.reject(new Error(data.payload.error || 'Command failed')); }
+      }
+    }
+    else if (data?.type === 'BACKEND_EVENT' && data.payload) {
+      const subs = _eventSubscribers.get(`${data.payload.vmName}_${data.payload.eventName}`);
+      if (subs) {
+        subs.forEach(cb => {
+          try { cb(data.payload.args); } catch (e) { console.error(e); }
+        });
       }
     }
   });
@@ -404,6 +415,26 @@ export function MaterialVM_ApplyMaterialChanges(stationIndex: number, draftData:
  */
 export function MaterialVM_PasteMaterialChanges(stationIndices: number[], templateData: MaterialItem): Promise<FormResult> {
   return invokeCommandAsync<FormResult>('MaterialVM', 'PasteMaterialChanges', { stationIndices, templateData });
+}
+
+/**
+ * 当稼动率过低时触发警告
+ * @param callback Function to be called when the event is triggered
+ * @returns Function to unsubscribe from the event
+ */
+export function onMonitorVM_UtilizationWarning(callback: (args: string) => void): () => void {
+  const key = 'MonitorVM_UtilizationWarning';
+  if (!_eventSubscribers.has(key)) {
+    _eventSubscribers.set(key, new Set());
+  }
+  _eventSubscribers.get(key)!.add(callback as any);
+  return () => {
+    const subs = _eventSubscribers.get(key);
+    if (subs) {
+      subs.delete(callback as any);
+      if (subs.size === 0) _eventSubscribers.delete(key);
+    }
+  };
 }
 
 /**

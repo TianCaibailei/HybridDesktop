@@ -1,5 +1,6 @@
-import { useAppStore } from '../store/generatedStore';
+import { useAppStore, onMonitorVM_UtilizationWarning } from '../store/generatedStore';
 import { Activity, ArrowUpRight, ArrowDownRight, Clock, Pause, Play, BarChart3, Zap } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function ProductionBoard() {
     const monitor = useAppStore((s) => s.monitorVM);
@@ -9,6 +10,15 @@ export default function ProductionBoard() {
     const downTime = monitor?.downTime ?? '00:00:00';
     const utilization = monitor?.utilization ?? 0;
     const isRunning = monitor?.isRunning ?? false;
+
+    // 独立注册后端事件监听
+    useEffect(() => {
+        const unsubscribe = onMonitorVM_UtilizationWarning((msg: string) => {
+            // 此处用原生的 alert 演示。实际项目中可换成 antd 的 message 或 sonner 的 toast
+            alert(`【后端事件通知】\n${msg}`);
+        });
+        return unsubscribe;
+    }, []);
 
     // 稼动率圆环参数
     const radius = 45;
