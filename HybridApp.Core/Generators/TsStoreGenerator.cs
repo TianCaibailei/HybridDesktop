@@ -62,6 +62,30 @@ namespace HybridApp.Core.Generators
                         DiscoverTypes(param.ParameterType, queue);
                     }
                 }
+
+                // Discover nested types from events
+                var syncEvents = type.GetEvents(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(e => e.GetCustomAttribute<SyncEventAttribute>() != null);
+                foreach (var ev in syncEvents)
+                {
+                    var handlerType = ev.EventHandlerType;
+                    if (handlerType != null)
+                    {
+                        var invokeMethod = handlerType.GetMethod("Invoke");
+                        if (invokeMethod != null)
+                        {
+                            var parameters = invokeMethod.GetParameters();
+                            if (parameters.Length == 2 && parameters[0].ParameterType == typeof(object))
+                            {
+                                DiscoverTypes(parameters[1].ParameterType, queue);
+                            }
+                            else if (parameters.Length == 1)
+                            {
+                                DiscoverTypes(parameters[0].ParameterType, queue);
+                            }
+                        }
+                    }
+                }
             }
 
             var sb = new StringBuilder();
@@ -184,7 +208,12 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();");
             sb.AppendLine("let _commandIdCounter = 0;");
             sb.AppendLine();
-            sb.AppendLine("// Listen for command responses from C# backend");
+            
+            sb.AppendLine("// ---- Event Subscriptions ----");
+            sb.AppendLine("const _eventSubscribers = new Map<string, Set<(args: any) => void>>();");
+            sb.AppendLine();
+
+            sb.AppendLine("// Listen for messages from C# backend");
             sb.AppendLine("if ((window as any).chrome?.webview) {");
             sb.AppendLine("  (window as any).chrome.webview.addEventListener('message', (event: any) => {");
             sb.AppendLine("    const data = event.data;");
@@ -194,6 +223,14 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("        _pendingCommands.delete(data.payload.requestId);");
             sb.AppendLine("        if (data.payload.success) { pending.resolve(data.payload.result); }");
             sb.AppendLine("        else { pending.reject(new Error(data.payload.error || 'Command failed')); }");
+            sb.AppendLine("      }");
+            sb.AppendLine("    }");
+            sb.AppendLine("    else if (data?.type === 'BACKEND_EVENT' && data.payload) {");
+            sb.AppendLine("      const subs = _eventSubscribers.get(`${data.payload.vmName}_${data.payload.eventName}`);");
+            sb.AppendLine("      if (subs) {");
+            sb.AppendLine("        subs.forEach(cb => {");
+            sb.AppendLine("          try { cb(data.payload.args); } catch (e) { console.error(e); }");
+            sb.AppendLine("        });");
             sb.AppendLine("      }");
             sb.AppendLine("    }");
             sb.AppendLine("  });");
@@ -235,11 +272,11 @@ namespace HybridApp.Core.Generators
                     .Where(m => m.GetCustomAttribute<SyncCommandAttribute>() != null)
                     .ToList();
 
-                if (commandMethods.Count == 0) continue;
-
-                foreach (var method in commandMethods)
+                if (commandMethods.Count > 0)
                 {
-                    var cmdAttr = method.GetCustomAttribute<SyncCommandAttribute>();
+                    foreach (var method in commandMethods)
+                    {
+                        var cmdAttr = method.GetCustomAttribute<SyncCommandAttribute>();
                     var returnType = method.ReturnType;
                     bool hasReturn = returnType != typeof(void);
                     string tsReturnType = hasReturn ? MapToTsType(returnType) : "void";
@@ -281,6 +318,67 @@ namespace HybridApp.Core.Generators
                         sb.AppendLine($"export function {vmName}_{method.Name}({paramsList}): void {{");
                         sb.AppendLine($"  invokeCommand('{vmName}', '{method.Name}', {argsObj});");
                     }
+                    sb.AppendLine("}");
+                    sb.AppendLine();
+                }
+            }
+
+            // --- Generate Event Listeners ---
+                var eventInfos = vm.GetEvents(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(e => e.GetCustomAttribute<SyncEventAttribute>() != null)
+                    .ToList();
+
+                foreach (var ev in eventInfos)
+                {
+                    var evAttr = ev.GetCustomAttribute<SyncEventAttribute>();
+                    var handlerType = ev.EventHandlerType;
+                    string argTsType = "void";
+
+                    if (handlerType != null)
+                    {
+                        var invokeMethod = handlerType.GetMethod("Invoke");
+                        if (invokeMethod != null)
+                        {
+                            var parameters = invokeMethod.GetParameters();
+                            if (parameters.Length == 2 && parameters[0].ParameterType == typeof(object))
+                            {
+                                argTsType = MapToTsType(parameters[1].ParameterType);
+                            }
+                            else if (parameters.Length == 1)
+                            {
+                                argTsType = MapToTsType(parameters[0].ParameterType);
+                            }
+                        }
+                    }
+
+                    sb.AppendLine("/**");
+                    if (!string.IsNullOrEmpty(evAttr?.Description))
+                        sb.AppendLine($" * {evAttr.Description}");
+                    sb.AppendLine($" * @param callback Function to be called when the event is triggered");
+                    sb.AppendLine($" * @returns Function to unsubscribe from the event");
+                    sb.AppendLine(" */");
+                    
+                    if (argTsType == "void")
+                    {
+                        sb.AppendLine($"export function on{vmName}_{ev.Name}(callback: () => void): () => void {{");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"export function on{vmName}_{ev.Name}(callback: (args: {argTsType}) => void): () => void {{");
+                    }
+                    
+                    sb.AppendLine($"  const key = '{vmName}_{ev.Name}';");
+                    sb.AppendLine($"  if (!_eventSubscribers.has(key)) {{");
+                    sb.AppendLine($"    _eventSubscribers.set(key, new Set());");
+                    sb.AppendLine($"  }}");
+                    sb.AppendLine($"  _eventSubscribers.get(key)!.add(callback as any);");
+                    sb.AppendLine($"  return () => {{");
+                    sb.AppendLine($"    const subs = _eventSubscribers.get(key);");
+                    sb.AppendLine($"    if (subs) {{");
+                    sb.AppendLine($"      subs.delete(callback as any);");
+                    sb.AppendLine($"      if (subs.size === 0) _eventSubscribers.delete(key);");
+                    sb.AppendLine($"    }}");
+                    sb.AppendLine($"  }};");
                     sb.AppendLine("}");
                     sb.AppendLine();
                 }
