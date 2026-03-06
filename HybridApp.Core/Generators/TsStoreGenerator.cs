@@ -46,6 +46,22 @@ namespace HybridApp.Core.Generators
                 {
                     DiscoverTypes(prop.PropertyType, queue);
                 }
+
+                // Discover nested types from commands (parameters and logic return types)
+                var commandMethods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(m => m.GetCustomAttribute<SyncCommandAttribute>() != null);
+                
+                foreach (var method in commandMethods)
+                {
+                    if (method.ReturnType != typeof(void))
+                    {
+                        DiscoverTypes(method.ReturnType, queue);
+                    }
+                    foreach (var param in method.GetParameters())
+                    {
+                        DiscoverTypes(param.ParameterType, queue);
+                    }
+                }
             }
 
             var sb = new StringBuilder();
@@ -110,13 +126,18 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("  setBackendState: (vmName, propName, value) => {");
             sb.AppendLine("    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);");
             sb.AppendLine("    const isPath = propName.includes('.') || propName.includes('[');");
+            sb.AppendLine("    let shouldUpdate = false;");
             sb.AppendLine("    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)");
             sb.AppendLine("    if (!isPath) {");
             sb.AppendLine("      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);");
-            sb.AppendLine("      set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));");
+            sb.AppendLine("      set((state) => {");
+            sb.AppendLine("        const currentState = (state as any)[stateKey];");
+            sb.AppendLine("        if (currentState && currentState[propKey] === value) return state;");
+            sb.AppendLine("        shouldUpdate = true;");
+            sb.AppendLine("        return { ...state, [stateKey]: { ...currentState, [propKey]: value } };");
+            sb.AppendLine("      });");
             sb.AppendLine("    } else {");
-            sb.AppendLine("      // Support deep property update locally using mutative approach to avoid complex lodash.set in generated code");
-            sb.AppendLine("      // Alternatively backend's subsequent STATE_SYNC will overwrite this with the final data.");
+            sb.AppendLine("      // Support deep property update locally using mutative approach");
             sb.AppendLine("      set((state) => {");
             sb.AppendLine("         const newState = { ...state };");
             sb.AppendLine("         const vmState = { ...(newState as any)[stateKey] };");
@@ -125,19 +146,20 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("         const parts = propName.split(/[.\\]\\[]/g).filter(Boolean);");
             sb.AppendLine("         for (let i = 0; i < parts.length - 1; i++) {");
             sb.AppendLine("             const p = parts[i];");
-            sb.AppendLine("             // lower case first level if needed");
             sb.AppendLine("             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;");
             sb.AppendLine("             if (current[key] !== undefined) current = current[key];");
             sb.AppendLine("         }");
             sb.AppendLine("         const lastPart = parts[parts.length - 1];");
             sb.AppendLine("         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;");
+            sb.AppendLine("         if (current[lastKey] === value) return state;");
+            sb.AppendLine("         shouldUpdate = true;");
             sb.AppendLine("         current[lastKey] = value;");
             sb.AppendLine("         newState[stateKey as keyof AppState] = vmState as any;");
             sb.AppendLine("         return newState;");
             sb.AppendLine("      });");
             sb.AppendLine("    }");
-            sb.AppendLine("    // 2. Push to C# Backend");
-            sb.AppendLine("    if ((window as any).chrome?.webview) {");
+            sb.AppendLine("    // 2. Push to C# Backend only if value changed");
+            sb.AppendLine("    if (shouldUpdate && (window as any).chrome?.webview) {");
             sb.AppendLine("      (window as any).chrome.webview.postMessage({");
             sb.AppendLine("        type: 'STATE_SET',");
             sb.AppendLine("        payload: { vmName, propName, value }");
