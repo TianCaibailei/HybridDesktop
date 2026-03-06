@@ -58,7 +58,7 @@ namespace IndustrialMonitor.ViewModels
     {
         private ObservableCollection<ToolItem> _tools = new ObservableCollection<ToolItem>();
         private bool _hasLifeModule = true;
-        private bool _hasCalibrationModule = true;
+        private bool _hasCalibrationModule = false;
         private bool _hasCompensationModule = true;
 
         public ToolVM() : base("ToolVM")

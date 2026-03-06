@@ -1,8 +1,10 @@
 import CncViewer from './components/CncViewer';
 import RectTurntable from './components/RectTurntable';
 import ProductionBoard from './components/ProductionBoard';
+import CncStatusCard from './components/CncStatusCard';
 import MaterialPage from './pages/MaterialPage';
 import ToolPage from './pages/ToolPage';
+import GlobalAlert from './components/GlobalAlert';
 import { Cpu, LayoutDashboard, List, Wrench } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/generatedStore';
@@ -31,12 +33,14 @@ export default function App() {
 
     return (
         <div className="w-full h-screen bg-slate-950 text-slate-200 font-sans flex flex-col overflow-hidden">
+            <GlobalAlert />
+
             {/* 顶部状态栏 */}
             <header className="flex-shrink-0 h-14 bg-slate-900/80 border-b border-slate-800/50 flex flex-nowrap items-center px-6 gap-6 backdrop-blur-sm z-50">
                 <div className="flex items-center gap-3">
                     <Cpu size={22} className="text-cyan-400" />
                     <h1 className="text-base font-bold tracking-wide text-slate-100 flex items-baseline gap-1.5">
-                        工业监控面板
+                        拓界监控面板
                         <span className="text-cyan-400 text-xs opacity-80">Industrial Monitor</span>
                     </h1>
                 </div>
@@ -77,16 +81,17 @@ export default function App() {
                             <CncViewer />
                         </div>
 
-                        {/* 右侧: 上下布局 (上矩形转盘，下生产看板) */}
-                        <div className="flex justify-start flex-col gap-4 min-h-0 overflow-hidden">
+                        {/* 右侧: 上下布局 (上矩形转盘，下生产看板及状态卡片) */}
+                        <div className="flex justify-start flex-col gap-2 min-h-0 overflow-hidden">
                             {/* 矩形转盘 */}
                             <div className="flex-1 shrink-0 overflow-auto flex items-center justify-center">
                                 <RectTurntable />
                             </div>
 
-                            {/* 生产数据看板 */}
+                            {/* 生产数据看板 & CNC状态 */}
                             <div className="shrink-0">
                                 <ProductionBoard />
+                                <CncStatusCard />
                             </div>
                         </div>
                     </div>

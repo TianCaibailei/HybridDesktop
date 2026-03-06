@@ -47,8 +47,20 @@ namespace IndustrialMonitor.ViewModels
         public double Utilization
         {
             get => _utilization;
-            set => SetProperty(ref _utilization, value);
+            set
+            {
+                if (SetProperty(ref _utilization, value))
+                {
+                    if (value < 80 && value > 0)
+                    {
+                        UtilizationWarning?.Invoke(this, $"注意：当前稼动率已降至 {value}%，请检查生产线状态！");
+                    }
+                }
+            }
         }
+
+        [SyncEvent(Description = "当稼动率过低时触发警告")]
+        public event EventHandler<string>? UtilizationWarning;
 
         [SyncProperty(Description = "是否正在生产")]
         public bool IsRunning

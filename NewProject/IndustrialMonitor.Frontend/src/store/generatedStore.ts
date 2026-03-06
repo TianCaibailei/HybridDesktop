@@ -17,6 +17,74 @@ export interface CncPathVM {
 }
 
 /**
+ * CNC设备运行状态数据，包含进给、主轴、各轴位置等
+ */
+export interface CncStatusVM {
+  /**
+   * 进给速度 (mm/min)
+   */
+  feedRate: number;
+  /**
+   * 主轴转速 (RPM)
+   */
+  spindleSpeed: number;
+  /**
+   * 当前刀号
+   */
+  toolNumber: number;
+  /**
+   * 运转状态 (如：运行中、停止、进给保持、报警)
+   */
+  runningState: string;
+  /**
+   * X轴位置
+   */
+  posX: number;
+  /**
+   * Y轴位置
+   */
+  posY: number;
+  /**
+   * Z轴位置
+   */
+  posZ: number;
+  /**
+   * A轴位置
+   */
+  posA: number;
+  /**
+   * B轴位置
+   */
+  posB: number;
+  /**
+   * C轴位置
+   */
+  posC: number;
+}
+
+/**
+ * 全局机器状态，负责管理整机报警和提示信息
+ */
+export interface MachineVM {
+  /**
+   * 当前是否存在未清除的报警
+   */
+  hasActiveAlarm: boolean;
+  /**
+   * 当前报警的详情内容
+   */
+  currentAlarm: AlarmPayload;
+  /**
+   * 当前是否存在未清除的提示
+   */
+  hasActiveInfo: boolean;
+  /**
+   * 当前提示的详情内容
+   */
+  currentInfo: AlarmPayload;
+}
+
+/**
  * 物料信息展示数据层
  */
 export interface MaterialVM {
@@ -110,6 +178,13 @@ export interface TurntableVM {
    * 旋转方向：1=正转(顺时针运转), -1=反转(逆时针运转)
    */
   rotateDirection: number;
+}
+
+export interface AlarmPayload {
+  alarmId: string;
+  level: string;
+  message: string;
+  timestamp: string;
 }
 
 export interface MaterialItem {
@@ -236,6 +311,14 @@ export interface AppState {
    */
   cncPathVM: CncPathVM;
   /**
+   * CNC设备运行状态数据，包含进给、主轴、各轴位置等
+   */
+  cncStatusVM: CncStatusVM;
+  /**
+   * 全局机器状态，负责管理整机报警和提示信息
+   */
+  machineVM: MachineVM;
+  /**
    * 物料信息展示数据层
    */
   materialVM: MaterialVM;
@@ -261,6 +344,8 @@ export interface AppActions {
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
   cncPathVM: {} as CncPathVM,
+  cncStatusVM: {} as CncStatusVM,
+  machineVM: {} as MachineVM,
   materialVM: {} as MaterialVM,
   monitorVM: {} as MonitorVM,
   toolVM: {} as ToolVM,
@@ -387,6 +472,46 @@ function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: 
  */
 export function CncPathVM_LoadNcFile(filePath: string): Promise<string> {
   return invokeCommandAsync<string>('CncPathVM', 'LoadNcFile', { filePath });
+}
+
+/**
+ * 当机器发生新报警时触发
+ * @param callback Function to be called when the event is triggered
+ * @returns Function to unsubscribe from the event
+ */
+export function onMachineVM_OnNewAlarm(callback: (args: AlarmPayload) => void): () => void {
+  const key = 'MachineVM_OnNewAlarm';
+  if (!_eventSubscribers.has(key)) {
+    _eventSubscribers.set(key, new Set());
+  }
+  _eventSubscribers.get(key)!.add(callback as any);
+  return () => {
+    const subs = _eventSubscribers.get(key);
+    if (subs) {
+      subs.delete(callback as any);
+      if (subs.size === 0) _eventSubscribers.delete(key);
+    }
+  };
+}
+
+/**
+ * 当机器发生新提示时触发
+ * @param callback Function to be called when the event is triggered
+ * @returns Function to unsubscribe from the event
+ */
+export function onMachineVM_OnNewInfo(callback: (args: AlarmPayload) => void): () => void {
+  const key = 'MachineVM_OnNewInfo';
+  if (!_eventSubscribers.has(key)) {
+    _eventSubscribers.set(key, new Set());
+  }
+  _eventSubscribers.get(key)!.add(callback as any);
+  return () => {
+    const subs = _eventSubscribers.get(key);
+    if (subs) {
+      subs.delete(callback as any);
+      if (subs.size === 0) _eventSubscribers.delete(key);
+    }
+  };
 }
 
 /**

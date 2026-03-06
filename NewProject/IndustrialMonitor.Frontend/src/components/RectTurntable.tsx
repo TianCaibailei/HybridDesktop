@@ -195,13 +195,13 @@ export default function RectTurntable() {
     const offsetY = (viewH - TRACK_H) / 2;
 
     return (
-        <div className="bg-slate-800/80 rounded-2xl p-5 shadow-2xl border border-slate-700/50 flex flex-col items-center backdrop-blur-sm">
-            <div className="w-full flex justify-between items-center mb-4 pb-3 border-b border-slate-700/50">
-                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                    <Cpu className="text-purple-400" size={18} />
+        <div className="bg-slate-800/80 rounded-2xl p-4 shadow-2xl border border-slate-700/50 flex flex-col items-center backdrop-blur-sm">
+            <div className="w-full flex justify-between items-center mb-2 pb-2 border-b border-slate-700/50">
+                <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <Cpu className="text-purple-400" size={16} />
                     矩形柔性传输轨道
                 </h2>
-                <div className="flex gap-2 text-xs">
+                <div className="flex gap-2 text-[10px]">
                     <span className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 text-slate-400">
                         X:{xCount} Y:{yCount} 共{totalStations}工位
                     </span>

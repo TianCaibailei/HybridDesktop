@@ -14,6 +14,8 @@ public partial class MainForm : Form
     private CncPathVM _cncPathVM = new CncPathVM();
     private MaterialVM _materialVM = new MaterialVM();
     private ToolVM _toolVM = new ToolVM();
+    private MachineVM _machineVM = new MachineVM();
+    private CncStatusVM _cncStatusVM = new CncStatusVM();
 
     public MainForm()
     {
@@ -57,6 +59,8 @@ public partial class MainForm : Form
         _vmManager.Register(_cncPathVM);
         _vmManager.Register(_materialVM);
         _vmManager.Register(_toolVM);
+        _vmManager.Register(_machineVM);
+        _vmManager.Register(_cncStatusVM);
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG
@@ -155,5 +159,25 @@ public partial class MainForm : Form
         {
             _monitorVM.Utilization = Math.Round((double)_monitorVM.OutputCount / _monitorVM.InputCount * 100, 1);
         }
+    }
+
+    private void btnAlarm_Click(object sender, EventArgs e)
+    {
+        _machineVM.TriggerTestAlarm();
+    }
+
+    private void btnClearAlarm_Click(object sender, EventArgs e)
+    {
+        _machineVM.ClearAlarm();
+    }
+
+    private void btnInfo_Click(object sender, EventArgs e)
+    {
+        _machineVM.TriggerTestInfo();
+    }
+
+    private void btnClearInfo_Click(object sender, EventArgs e)
+    {
+        _machineVM.ClearInfo();
     }
 }
