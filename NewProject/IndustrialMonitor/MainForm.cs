@@ -67,13 +67,13 @@ public partial class MainForm : Form
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG
-        var generator = new TsStoreGenerator();
-        string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
-        string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
-        if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
-        {
-            generator.Generate(frontendPath, typeof(Program).Assembly);
-        }
+        //var generator = new TsStoreGenerator();
+        //string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
+        //string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
+        //if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
+        //{
+        //    generator.Generate(frontendPath, typeof(Program).Assembly);
+        //}
 #endif
 
         // 4. 设置虚拟域名映射
@@ -82,7 +82,8 @@ public partial class MainForm : Form
         if (!Directory.Exists(distFolderPath))
         {
             // 开发时 dist 可能位于前端项目目录
-            string devDistPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "IndustrialMonitor.Frontend", "dist"));
+            //string devDistPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "IndustrialMonitor.Frontend", "dist"));
+            string devDistPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dist"));
             if (Directory.Exists(devDistPath))
                 distFolderPath = devDistPath;
         }
