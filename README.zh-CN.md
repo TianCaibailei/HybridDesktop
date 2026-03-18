@@ -40,6 +40,19 @@ HybridDesktop 是一个专为工控、非标自动化和视觉检测等高性能
 #### 2. 前端开发者工作流
 
 *   **获取最新仓库生成的代码**：当后端的 C# 兄弟调用完生成器后，你的项目中会多出一个开箱即用的状态库 `useAppStore` Hook 钩子。你无需阅读和维护哪怕一句 Fetch / Promise 或 Window.postMessage 的 IPC 同步代码和类型系统定义文件。
+    *   **关键初始化步骤**：为避免 F5 刷新等时序问题带来的数据丢失，前端请在入口组件（如 `App.tsx`）挂载时，主动发送一次 `INIT_REQUEST` 信号向后端请求全量数据同步：
+        ```tsx
+        // App.tsx
+        useEffect(() => {
+            if ((window as any).chrome?.webview) {
+                const handler = (event: any) => { /* 处理 INIT_RESPONSE 和 STATE_SYNC */ };
+                (window as any).chrome.webview.addEventListener('message', handler);
+                // 注册监听器后主动找后端要数据
+                (window as any).chrome.webview.postMessage({ type: 'INIT_REQUEST' });
+                return () => (window as any).chrome.webview.removeEventListener('message', handler);
+            }
+        }, []);
+        ```
 *   **直接实现 UI 表现与数据的绑定**：
     *   **读取控制参数**：通过 `const exposure = useAppStore(state => state.VisionVM.Exposure);` 直取。
     *   **写入控制指令**：通过自带的方法调用 `useAppStore(state => state.setBackendState("VisionVM", "Exposure", 新数值))`，之后 C# 机器就会随之而动，无需设计额外的动作接口 API 接口或者参数协商。

@@ -32,4 +32,17 @@ namespace HybridApp.Core.Attributes
         /// </summary>
         public string Description { get; set; }
     }
+
+    /// <summary>
+    /// 标记可被前端监听的后端事件。
+    /// 当后端触发该事件时，会自动通过 WebSocket/WebView 将事件及参数推送到前端。
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Event)]
+    public class SyncEventAttribute : Attribute
+    {
+        /// <summary>
+        /// 事件功能描述，将被生成为前端 TypeScript 函数的 JSDoc 注释
+        /// </summary>
+        public string Description { get; set; }
+    }
 }

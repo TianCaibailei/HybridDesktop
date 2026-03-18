@@ -17,6 +17,78 @@ export interface CncPathVM {
 }
 
 /**
+ * CNC设备运行状态数据，包含进给、主轴、各轴位置等
+ */
+export interface CncStatusVM {
+  /**
+   * 进给速度 (mm/min)
+   */
+  feedRate: number;
+  /**
+   * 主轴转速 (RPM)
+   */
+  spindleSpeed: number;
+  /**
+   * 当前刀号
+   */
+  toolNumber: number;
+  /**
+   * 运转状态 (如：运行中、停止、进给保持、报警)
+   */
+  runningState: string;
+  /**
+   * X轴位置
+   */
+  posX: number;
+  /**
+   * Y轴位置
+   */
+  posY: number;
+  /**
+   * Z轴位置
+   */
+  posZ: number;
+  /**
+   * A轴位置
+   */
+  posA: number;
+  /**
+   * B轴位置
+   */
+  posB: number;
+  /**
+   * C轴位置
+   */
+  posC: number;
+}
+
+/**
+ * 全局机器状态，负责管理整机报警和提示信息
+ */
+export interface MachineVM {
+  /**
+   * 当前是否存在未清除的报警
+   */
+  hasActiveAlarm: boolean;
+  /**
+   * 当前报警的详情内容
+   */
+  currentAlarm: AlarmPayload;
+  /**
+   * 当前是否存在未清除的提示
+   */
+  hasActiveInfo: boolean;
+  /**
+   * 当前提示的详情内容
+   */
+  currentInfo: AlarmPayload;
+  /**
+   * 用户Sqlite本地数据库路径
+   */
+  sqliteDbPath: string;
+}
+
+/**
  * 物料信息展示数据层
  */
 export interface MaterialVM {
@@ -57,6 +129,34 @@ export interface MonitorVM {
 }
 
 /**
+ * 生产数据统计及历史查询ViewModel
+ */
+export interface ProduceDataVM {
+}
+
+/**
+ * 刀具管理数据模型
+ */
+export interface ToolVM {
+  /**
+   * 36把刀的集合
+   */
+  tools: any;
+  /**
+   * 是否拥有寿命管理模块权限
+   */
+  hasLifeModule: boolean;
+  /**
+   * 是否拥有对刀管理模块权限
+   */
+  hasCalibrationModule: boolean;
+  /**
+   * 是否拥有刀补管理模块权限
+   */
+  hasCompensationModule: boolean;
+}
+
+/**
  * 矩形转盘控制，支持X/Y方向独立工位数和旋转方向控制
  */
 export interface TurntableVM {
@@ -88,6 +188,13 @@ export interface TurntableVM {
    * 旋转方向：1=正转(顺时针运转), -1=反转(逆时针运转)
    */
   rotateDirection: number;
+}
+
+export interface AlarmPayload {
+  alarmId: string;
+  level: string;
+  message: string;
+  timestamp: string;
 }
 
 export interface MaterialItem {
@@ -145,6 +252,72 @@ export interface MaterialItem {
   arraySpacing: number;
 }
 
+export interface FormResult {
+  success: boolean;
+  message: string;
+}
+
+export interface ProduceData {
+  fileName: string;
+  count: number;
+  startTime: string;
+  endTime: string;
+  timeSpanMinute: number;
+}
+
+export interface DailyProduceStat {
+  dateString: string;
+  totalCount: number;
+  averageTimeSpan: number;
+}
+
+export interface ToolItem {
+  /**
+   * 刀号
+   */
+  id: number;
+  /**
+   * 别名
+   */
+  name: string;
+  /**
+   * 寿命上限 (小时)
+   */
+  maxLifetime: number;
+  /**
+   * 当前已使用时长 (小时)
+   */
+  usedLifetime: number;
+  /**
+   * 已切换次数
+   */
+  switchCount: number;
+  /**
+   * 最大允许切换次数
+   */
+  maxSwitchCount: number;
+  /**
+   * 上一次更换刀具时间
+   */
+  lastReplacedAt: string;
+  /**
+   * 上一次对刀时间
+   */
+  lastCalibratedAt: string;
+  /**
+   * 对刀时间间隔 (小时)
+   */
+  calibrationInterval: number;
+  /**
+   * 刀补D (全局)
+   */
+  compensationD: number;
+  /**
+   * 刀补H (全局)
+   */
+  compensationH: number;
+}
+
 export interface StationItem {
   /**
    * 工位状态（0=空闲,1=待加工,2=加工中,3=加工完成,4=未知）
@@ -162,6 +335,14 @@ export interface AppState {
    */
   cncPathVM: CncPathVM;
   /**
+   * CNC设备运行状态数据，包含进给、主轴、各轴位置等
+   */
+  cncStatusVM: CncStatusVM;
+  /**
+   * 全局机器状态，负责管理整机报警和提示信息
+   */
+  machineVM: MachineVM;
+  /**
    * 物料信息展示数据层
    */
   materialVM: MaterialVM;
@@ -169,6 +350,14 @@ export interface AppState {
    * 生产监控指标数据，包含投入产出、运行时间和稼动率等
    */
   monitorVM: MonitorVM;
+  /**
+   * 生产数据统计及历史查询ViewModel
+   */
+  produceDataVM: ProduceDataVM;
+  /**
+   * 刀具管理数据模型
+   */
+  toolVM: ToolVM;
   /**
    * 矩形转盘控制，支持X/Y方向独立工位数和旋转方向控制
    */
@@ -183,8 +372,12 @@ export interface AppActions {
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
   cncPathVM: {} as CncPathVM,
+  cncStatusVM: {} as CncStatusVM,
+  machineVM: {} as MachineVM,
   materialVM: {} as MaterialVM,
   monitorVM: {} as MonitorVM,
+  produceDataVM: {} as ProduceDataVM,
+  toolVM: {} as ToolVM,
   turntableVM: {} as TurntableVM,
   updateStateFromBackend: (vmName, propName, value) => set((state) => {
     const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
@@ -194,11 +387,41 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   }),
   setBackendState: (vmName, propName, value) => {
     const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
-    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
-    // 1. Update Local Store
-    set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));
-    // 2. Push to C# Backend
-    if ((window as any).chrome?.webview) {
+    const isPath = propName.includes('.') || propName.includes('[');
+    let shouldUpdate = false;
+    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)
+    if (!isPath) {
+      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
+      set((state) => {
+        const currentState = (state as any)[stateKey];
+        if (currentState && currentState[propKey] === value) return state;
+        shouldUpdate = true;
+        return { ...state, [stateKey]: { ...currentState, [propKey]: value } };
+      });
+    } else {
+      // Support deep property update locally using mutative approach
+      set((state) => {
+         const newState = { ...state };
+         const vmState = { ...(newState as any)[stateKey] };
+         // Basic path parser for local immediate response
+         let current: any = vmState;
+         const parts = propName.split(/[.\]\[]/g).filter(Boolean);
+         for (let i = 0; i < parts.length - 1; i++) {
+             const p = parts[i];
+             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;
+             if (current[key] !== undefined) current = current[key];
+         }
+         const lastPart = parts[parts.length - 1];
+         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;
+         if (current[lastKey] === value) return state;
+         shouldUpdate = true;
+         current[lastKey] = value;
+         newState[stateKey as keyof AppState] = vmState as any;
+         return newState;
+      });
+    }
+    // 2. Push to C# Backend only if value changed
+    if (shouldUpdate && (window as any).chrome?.webview) {
       (window as any).chrome.webview.postMessage({
         type: 'STATE_SET',
         payload: { vmName, propName, value }
@@ -220,7 +443,10 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
 const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();
 let _commandIdCounter = 0;
 
-// Listen for command responses from C# backend
+// ---- Event Subscriptions ----
+const _eventSubscribers = new Map<string, Set<(args: any) => void>>();
+
+// Listen for messages from C# backend
 if ((window as any).chrome?.webview) {
   (window as any).chrome.webview.addEventListener('message', (event: any) => {
     const data = event.data;
@@ -230,6 +456,14 @@ if ((window as any).chrome?.webview) {
         _pendingCommands.delete(data.payload.requestId);
         if (data.payload.success) { pending.resolve(data.payload.result); }
         else { pending.reject(new Error(data.payload.error || 'Command failed')); }
+      }
+    }
+    else if (data?.type === 'BACKEND_EVENT' && data.payload) {
+      const subs = _eventSubscribers.get(`${data.payload.vmName}_${data.payload.eventName}`);
+      if (subs) {
+        subs.forEach(cb => {
+          try { cb(data.payload.args); } catch (e) { console.error(e); }
+        });
       }
     }
   });
@@ -267,6 +501,150 @@ function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: 
  */
 export function CncPathVM_LoadNcFile(filePath: string): Promise<string> {
   return invokeCommandAsync<string>('CncPathVM', 'LoadNcFile', { filePath });
+}
+
+/**
+ * 当机器发生新报警时触发
+ * @param callback Function to be called when the event is triggered
+ * @returns Function to unsubscribe from the event
+ */
+export function onMachineVM_OnNewAlarm(callback: (args: AlarmPayload) => void): () => void {
+  const key = 'MachineVM_OnNewAlarm';
+  if (!_eventSubscribers.has(key)) {
+    _eventSubscribers.set(key, new Set());
+  }
+  _eventSubscribers.get(key)!.add(callback as any);
+  return () => {
+    const subs = _eventSubscribers.get(key);
+    if (subs) {
+      subs.delete(callback as any);
+      if (subs.size === 0) _eventSubscribers.delete(key);
+    }
+  };
+}
+
+/**
+ * 当机器发生新提示时触发
+ * @param callback Function to be called when the event is triggered
+ * @returns Function to unsubscribe from the event
+ */
+export function onMachineVM_OnNewInfo(callback: (args: AlarmPayload) => void): () => void {
+  const key = 'MachineVM_OnNewInfo';
+  if (!_eventSubscribers.has(key)) {
+    _eventSubscribers.set(key, new Set());
+  }
+  _eventSubscribers.get(key)!.add(callback as any);
+  return () => {
+    const subs = _eventSubscribers.get(key);
+    if (subs) {
+      subs.delete(callback as any);
+      if (subs.size === 0) _eventSubscribers.delete(key);
+    }
+  };
+}
+
+/**
+ * 弹出文件选择对话框选择NC文件
+ * @returns Promise<string>
+ */
+export function MaterialVM_SelectNcFile(): Promise<string> {
+  return invokeCommandAsync<string>('MaterialVM', 'SelectNcFile', {});
+}
+
+/**
+ * 校验并应用工位物料行数据的修改
+ * @param stationIndex number
+ * @param draftData MaterialItem
+ * @returns Promise<FormResult>
+ */
+export function MaterialVM_ApplyMaterialChanges(stationIndex: number, draftData: MaterialItem): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('MaterialVM', 'ApplyMaterialChanges', { stationIndex, draftData });
+}
+
+/**
+ * 批量粘贴并应用多个工位的数据
+ * @param stationIndices number[]
+ * @param templateData MaterialItem
+ * @returns Promise<FormResult>
+ */
+export function MaterialVM_PasteMaterialChanges(stationIndices: number[], templateData: MaterialItem): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('MaterialVM', 'PasteMaterialChanges', { stationIndices, templateData });
+}
+
+/**
+ * 当稼动率过低时触发警告
+ * @param callback Function to be called when the event is triggered
+ * @returns Function to unsubscribe from the event
+ */
+export function onMonitorVM_UtilizationWarning(callback: (args: string) => void): () => void {
+  const key = 'MonitorVM_UtilizationWarning';
+  if (!_eventSubscribers.has(key)) {
+    _eventSubscribers.set(key, new Set());
+  }
+  _eventSubscribers.get(key)!.add(callback as any);
+  return () => {
+    const subs = _eventSubscribers.get(key);
+    if (subs) {
+      subs.delete(callback as any);
+      if (subs.size === 0) _eventSubscribers.delete(key);
+    }
+  };
+}
+
+/**
+ * 根据时间范围查询班次/详细的生产数据记录
+ * @param startTime string
+ * @param endTime string
+ * @returns Promise<ProduceData[]>
+ */
+export function ProduceDataVM_QueryProduceData(startTime: string, endTime: string): Promise<ProduceData[]> {
+  return invokeCommandAsync<ProduceData[]>('ProduceDataVM', 'QueryProduceData', { startTime, endTime });
+}
+
+/**
+ * 查询指定时间范围内每天的加工数量统计，用于图表展示
+ * @param startTime string
+ * @param endTime string
+ * @returns Promise<DailyProduceStat[]>
+ */
+export function ProduceDataVM_QueryDailyStatistics(startTime: string, endTime: string): Promise<DailyProduceStat[]> {
+  return invokeCommandAsync<DailyProduceStat[]>('ProduceDataVM', 'QueryDailyStatistics', { startTime, endTime });
+}
+
+/**
+ * 用于调试：初始化自动生成假数据避免表不存在
+ */
+export function ProduceDataVM_MockInitDataIfTableNotExists(): void {
+  invokeCommand('ProduceDataVM', 'MockInitDataIfTableNotExists', {});
+}
+
+/**
+ * 修改指定刀具的各项可编辑参数
+ * @param index number
+ * @param draftData ToolItem
+ * @returns Promise<FormResult>
+ */
+export function ToolVM_ApplyToolChanges(index: number, draftData: ToolItem): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('ToolVM', 'ApplyToolChanges', { index, draftData });
+}
+
+/**
+ * 批量粘贴并应用多个刀具的数据
+ * @param indices number[]
+ * @param templateData ToolItem
+ * @returns Promise<FormResult>
+ */
+export function ToolVM_PasteToolChanges(indices: number[], templateData: ToolItem): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('ToolVM', 'PasteToolChanges', { indices, templateData });
+}
+
+/**
+ * 批量手动对刀，更新最后对刀时间
+ * @param indices number[]
+ * @returns Promise<FormResult>
+ */
+export function ToolVM_CalibrateTools(indices: number[]): Promise<FormResult> {
+  return invokeCommandAsync<FormResult>('ToolVM', 'CalibrateTools', { indices });
 }
 
 /**

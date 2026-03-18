@@ -107,29 +107,107 @@ namespace HybridApp.Core.ViewModels
         /// <summary>
         /// 使用反射自动将前端传来的 JsonElement 转换为属性对应的类型并赋值。
         /// 内部做了容错处理，确保前端非法传值不会导致后端崩溃。
+        /// 支持基于路径的深度属性修改（如 "Config.InternalCamera.ResolutionX" 或 "Materials[0].Priority"）。
         /// </summary>
-        public virtual void SetPropertyByName(string propName, JsonElement value)
+        public virtual void SetPropertyByName(string propPath, JsonElement value)
         {
             try
             {
-                var prop = this.GetType().GetProperty(propName, 
-                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                
-                if (prop != null && prop.CanWrite)
+                if (string.IsNullOrEmpty(propPath)) return;
+
+                // 按 . 和 [ ] 拆分路径，例如 "Materials[0].Priority" -> ["Materials", "0", "Priority"]
+                var pathParts = propPath.Split(new[] { '.', '[', ']' }, StringSplitOptions.RemoveEmptyEntries);
+                if (pathParts.Length == 0) return;
+
+                object currentTarget = this;
+                PropertyInfo targetProp = null;
+                object targetCollection = null;
+                int targetIndex = -1;
+
+                // 遍历路径节点，直到倒数第一个（即真正的目标属性/元素）
+                for (int i = 0; i < pathParts.Length - 1; i++)
                 {
-                    var rawJson = value.GetRawText();
-                    var convertedValue = JsonSerializer.Deserialize(rawJson, prop.PropertyType, new JsonSerializerOptions 
-                    { 
-                        PropertyNameCaseInsensitive = true 
-                    });
+                    var part = pathParts[i];
+
+                    // 尝试作为集合索引
+                    if (int.TryParse(part, out int index))
+                    {
+                        if (currentTarget is System.Collections.IList list)
+                        {
+                            currentTarget = list[index];
+                            if (currentTarget == null) return; // 提前退出，防止接下来的解引用空异常
+                            continue;
+                        }
+                    }
+
+                    // 作为普通属性
+                    var prop = currentTarget.GetType().GetProperty(part, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    if (prop == null) return; // 路径不合法
+
+                    var nextTarget = prop.GetValue(currentTarget);
+                    if (nextTarget == null) return; // 对象尚未实例化
                     
-                    prop.SetValue(this, convertedValue);
-                    OnPropertyChanged(propName);
+                    currentTarget = nextTarget;
                 }
+
+                var lastPart = pathParts[^1];
+                
+                // 判断最后一个节点是属性还是索引
+                if (int.TryParse(lastPart, out targetIndex) && currentTarget is System.Collections.IList finalCollection)
+                {
+                    targetCollection = finalCollection;
+                }
+                else
+                {
+                    targetProp = currentTarget.GetType().GetProperty(lastPart, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    if (targetProp == null || !targetProp.CanWrite) return;
+                }
+
+                var rawJson = value.GetRawText();
+                Type convertType;
+
+                if (targetCollection != null)
+                {
+                    // 获取集合元素的类型
+                    var collectionType = targetCollection.GetType();
+                    convertType = collectionType.IsArray 
+                        ? collectionType.GetElementType() 
+                        : collectionType.GetGenericArguments().FirstOrDefault() ?? typeof(object);
+                }
+                else
+                {
+                    convertType = targetProp.PropertyType;
+                }
+
+                // 反序列化
+                var convertedValue = JsonSerializer.Deserialize(rawJson, convertType, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                // 赋值并在当前对象上下文内尝试触发事件
+                if (targetCollection != null)
+                {
+                    // 对 IList<T> 的具体元素进行赋值
+                    ((System.Collections.IList)targetCollection)[targetIndex] = convertedValue;
+                }
+                else
+                {
+                    targetProp.SetValue(currentTarget, convertedValue);
+                    
+                    // 如果这个对象自身就是 INotifyPropertyChanged，我们需要手动触发它的 PropertyChanged。
+                    // 但是因为我们现在可能在它外部反向赋值（除非它是 this），如果没有公共的 RaisePropertyChanged，
+                    // 它往往不会触发通知。所以更好的做法是：目标属性的 Setter 通常会自己触发 OnPropertyChanged。
+                }
+
+                // 为了保险，并且保证前端收到反馈（虽然现在我们提倡仅靠这部分进行纯写入）：
+                // 如果这是 Root 上的属性赋值，因为其自身 Setter 会触发 OnPropertyChanged，我们不需要过多干预。
+                // 如果是深层级（如 Config.Camera.Res），Camera.ResolutionX 内部 setter 如果有 Set(ref, val) 它自己也会触发通知，
+                // 然后由于我们实现了 WatchProperty(RootName, target)，它会最终调用 this.ManualSync().
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[SyncError] Failed to set property '{VmName}.{propName}': {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[SyncError] Failed to set deep property '{VmName}.{propPath}': {ex.Message}");
             }
         }
 

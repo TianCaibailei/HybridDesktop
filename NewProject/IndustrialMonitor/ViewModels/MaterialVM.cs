@@ -1,10 +1,18 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading;
+using System.Windows.Forms;
 using HybridApp.Core.Attributes;
 using HybridApp.Core.ViewModels;
 
 namespace IndustrialMonitor.ViewModels
 {
+    public class FormResult
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; }
+    }
+
     public class MaterialItem : ObservableObject
     {
         private string _stationState = "空";
@@ -98,6 +106,102 @@ namespace IndustrialMonitor.ViewModels
         {
             get => _materials;
             set => SetProperty(ref _materials, value);
+        }
+
+        [SyncCommand(Description = "弹出文件选择对话框选择NC文件")]
+        public string SelectNcFile()
+        {
+            string selectedPath = null;
+            
+            // OpenFileDialog must run in STA thread
+            var thread = new Thread(() =>
+            {
+                using (var ofd = new OpenFileDialog())
+                {
+                    ofd.Filter = "NC Files (*.nc)|*.nc|All Files (*.*)|*.*";
+                    ofd.Title = "Select NC File";
+                    if (ofd.ShowDialog() == DialogResult.OK)
+                    {
+                        selectedPath = ofd.FileName;
+                    }
+                }
+            });
+            
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+
+            return selectedPath ?? string.Empty;
+        }
+
+        [SyncCommand(Description = "校验并应用工位物料行数据的修改")]
+        public FormResult ApplyMaterialChanges(int stationIndex, MaterialItem draftData)
+        {
+            if (stationIndex < 0 || stationIndex >= _materials.Count)
+            {
+                return new FormResult { Success = false, Message = "无效的工位索引" };
+            }
+
+            if (draftData.BlankLength < draftData.ProductLength)
+            {
+                return new FormResult { Success = false, Message = "毛坯长度不能小于产品长度" };
+            }
+
+            if (draftData.BlankWidth < draftData.ProductWidth)
+            {
+                return new FormResult { Success = false, Message = "毛坯宽度不能小于产品宽度" };
+            }
+
+            if (draftData.ArrayCount <= 0)
+            {
+                return new FormResult { Success = false, Message = "阵列数必须大于0" };
+            }
+
+            var target = _materials[stationIndex];
+            
+            // Sync values to actual model
+            target.Priority = draftData.Priority;
+            target.BlankLength = draftData.BlankLength;
+            target.BlankWidth = draftData.BlankWidth;
+            target.NcFile = draftData.NcFile;
+            target.CenterDivide = draftData.CenterDivide;
+            target.OffsetZ = draftData.OffsetZ;
+            target.Angle = draftData.Angle;
+            target.ProductLength = draftData.ProductLength;
+            target.ProductWidth = draftData.ProductWidth;
+            target.ArrayCount = draftData.ArrayCount;
+            target.ArraySpacing = draftData.ArraySpacing;
+
+            return new FormResult { Success = true, Message = "保存成功" };
+        }
+
+        [SyncCommand(Description = "批量粘贴并应用多个工位的数据")]
+        public FormResult PasteMaterialChanges(int[] stationIndices, MaterialItem templateData)
+        {
+            if (stationIndices == null || stationIndices.Length == 0)
+            {
+                return new FormResult { Success = false, Message = "未选择目标工位" };
+            }
+
+            foreach (var idx in stationIndices)
+            {
+                if (idx < 0 || idx >= _materials.Count) continue;
+                
+                var target = _materials[idx];
+                target.Priority = templateData.Priority;
+                target.BlankLength = templateData.BlankLength;
+                target.BlankWidth = templateData.BlankWidth;
+                target.NcFile = templateData.NcFile;
+                target.CenterDivide = templateData.CenterDivide;
+                target.OffsetZ = templateData.OffsetZ;
+                target.Angle = templateData.Angle;
+                target.ProductLength = templateData.ProductLength;
+                target.ProductWidth = templateData.ProductWidth;
+                target.ArrayCount = templateData.ArrayCount;
+                target.ArraySpacing = templateData.ArraySpacing;
+            }
+
+            return new FormResult { Success = true, Message = $"已成功应用到 {stationIndices.Length} 个工位" };
         }
     }
 }

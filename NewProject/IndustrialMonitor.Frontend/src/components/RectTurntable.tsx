@@ -13,7 +13,7 @@ const STATION_STATES = [
 
 // 工位卡片组件（只展示，不允许手动点击切换）
 const StationCard = ({ name, statusObj }: { name: string; statusObj: typeof STATION_STATES[0] }) => (
-    <div className={`w-14 h-14 rounded-lg border-2 shadow-[0_0_12px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center relative z-10 transition-colors duration-300 ${statusObj.color}`}>
+    <div className={`w-14 h-14 rounded-2xl border-2 shadow-[0_0_12px_rgba(0,0,0,0.3)] flex flex-col items-center justify-center relative z-10 transition-colors duration-300 ${statusObj.color}`}>
         <span className="text-[11px] font-bold mb-0.5 tracking-wider">{name}</span>
         <span className="text-[9px] px-1 py-0.5 rounded font-semibold bg-slate-900/80 backdrop-blur-sm whitespace-nowrap">
             {statusObj.text}
@@ -195,13 +195,13 @@ export default function RectTurntable() {
     const offsetY = (viewH - TRACK_H) / 2;
 
     return (
-        <div className="bg-slate-800/80 rounded-2xl p-5 shadow-2xl border border-slate-700/50 flex flex-col items-center backdrop-blur-sm">
-            <div className="w-full flex justify-between items-center mb-4 pb-3 border-b border-slate-700/50">
-                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                    <Cpu className="text-purple-400" size={18} />
+        <div className="bg-slate-800/80 rounded-2xl p-4 shadow-2xl border border-slate-700/50 flex flex-col items-center backdrop-blur-sm">
+            <div className="w-full flex justify-between items-center mb-2 pb-2 border-b border-slate-700/50">
+                <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <Cpu className="text-purple-400" size={16} />
                     矩形柔性传输轨道
                 </h2>
-                <div className="flex gap-2 text-xs">
+                <div className="flex gap-2 text-[10px]">
                     <span className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700 text-slate-400">
                         X:{xCount} Y:{yCount} 共{totalStations}工位
                     </span>
@@ -211,6 +211,17 @@ export default function RectTurntable() {
             {/* 渲染视口 */}
             <div className="relative bg-slate-900/80 rounded-xl overflow-hidden shadow-inner border border-slate-800/50 flex items-center justify-center"
                 style={{ width: viewW, height: viewH }}>
+
+                {/* 状态图例 */}
+                <div className="absolute w-full mt-3 flex items-center justify-center gap-3 text-[10px]"
+                    style={{ left: TRACK_W * 0.5 - 230, bottom: 0 }}>
+                    {STATION_STATES.map(s => (
+                        <div key={s.id} className="flex items-center gap-1">
+                            <div className={`w-2.5 h-2.5 rounded-sm border ${s.color}`} />
+                            <span className="text-slate-500">{s.text}</span>
+                        </div>
+                    ))}
+                </div>
 
                 {/* 中心信息岛 */}
                 <div className="absolute bg-slate-800 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.5)] border border-slate-700 flex flex-col items-center justify-center"
@@ -284,15 +295,7 @@ export default function RectTurntable() {
                 </div>
             </div>
 
-            {/* 状态图例 */}
-            <div className="w-full mt-3 flex items-center justify-center gap-3 text-[10px]">
-                {STATION_STATES.map(s => (
-                    <div key={s.id} className="flex items-center gap-1">
-                        <div className={`w-2.5 h-2.5 rounded-sm border ${s.color}`} />
-                        <span className="text-slate-500">{s.text}</span>
-                    </div>
-                ))}
-            </div>
+
         </div>
     );
 }

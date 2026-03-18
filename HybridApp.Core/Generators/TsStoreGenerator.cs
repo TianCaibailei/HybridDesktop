@@ -46,6 +46,46 @@ namespace HybridApp.Core.Generators
                 {
                     DiscoverTypes(prop.PropertyType, queue);
                 }
+
+                // Discover nested types from commands (parameters and logic return types)
+                var commandMethods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(m => m.GetCustomAttribute<SyncCommandAttribute>() != null);
+                
+                foreach (var method in commandMethods)
+                {
+                    if (method.ReturnType != typeof(void))
+                    {
+                        DiscoverTypes(method.ReturnType, queue);
+                    }
+                    foreach (var param in method.GetParameters())
+                    {
+                        DiscoverTypes(param.ParameterType, queue);
+                    }
+                }
+
+                // Discover nested types from events
+                var syncEvents = type.GetEvents(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(e => e.GetCustomAttribute<SyncEventAttribute>() != null);
+                foreach (var ev in syncEvents)
+                {
+                    var handlerType = ev.EventHandlerType;
+                    if (handlerType != null)
+                    {
+                        var invokeMethod = handlerType.GetMethod("Invoke");
+                        if (invokeMethod != null)
+                        {
+                            var parameters = invokeMethod.GetParameters();
+                            if (parameters.Length == 2 && parameters[0].ParameterType == typeof(object))
+                            {
+                                DiscoverTypes(parameters[1].ParameterType, queue);
+                            }
+                            else if (parameters.Length == 1)
+                            {
+                                DiscoverTypes(parameters[0].ParameterType, queue);
+                            }
+                        }
+                    }
+                }
             }
 
             var sb = new StringBuilder();
@@ -109,11 +149,41 @@ namespace HybridApp.Core.Generators
             // Action: setBackendState (Dual-Sync)
             sb.AppendLine("  setBackendState: (vmName, propName, value) => {");
             sb.AppendLine("    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);");
-            sb.AppendLine("    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);");
-            sb.AppendLine("    // 1. Update Local Store");
-            sb.AppendLine("    set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));");
-            sb.AppendLine("    // 2. Push to C# Backend");
-            sb.AppendLine("    if ((window as any).chrome?.webview) {");
+            sb.AppendLine("    const isPath = propName.includes('.') || propName.includes('[');");
+            sb.AppendLine("    let shouldUpdate = false;");
+            sb.AppendLine("    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)");
+            sb.AppendLine("    if (!isPath) {");
+            sb.AppendLine("      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);");
+            sb.AppendLine("      set((state) => {");
+            sb.AppendLine("        const currentState = (state as any)[stateKey];");
+            sb.AppendLine("        if (currentState && currentState[propKey] === value) return state;");
+            sb.AppendLine("        shouldUpdate = true;");
+            sb.AppendLine("        return { ...state, [stateKey]: { ...currentState, [propKey]: value } };");
+            sb.AppendLine("      });");
+            sb.AppendLine("    } else {");
+            sb.AppendLine("      // Support deep property update locally using mutative approach");
+            sb.AppendLine("      set((state) => {");
+            sb.AppendLine("         const newState = { ...state };");
+            sb.AppendLine("         const vmState = { ...(newState as any)[stateKey] };");
+            sb.AppendLine("         // Basic path parser for local immediate response");
+            sb.AppendLine("         let current: any = vmState;");
+            sb.AppendLine("         const parts = propName.split(/[.\\]\\[]/g).filter(Boolean);");
+            sb.AppendLine("         for (let i = 0; i < parts.length - 1; i++) {");
+            sb.AppendLine("             const p = parts[i];");
+            sb.AppendLine("             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;");
+            sb.AppendLine("             if (current[key] !== undefined) current = current[key];");
+            sb.AppendLine("         }");
+            sb.AppendLine("         const lastPart = parts[parts.length - 1];");
+            sb.AppendLine("         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;");
+            sb.AppendLine("         if (current[lastKey] === value) return state;");
+            sb.AppendLine("         shouldUpdate = true;");
+            sb.AppendLine("         current[lastKey] = value;");
+            sb.AppendLine("         newState[stateKey as keyof AppState] = vmState as any;");
+            sb.AppendLine("         return newState;");
+            sb.AppendLine("      });");
+            sb.AppendLine("    }");
+            sb.AppendLine("    // 2. Push to C# Backend only if value changed");
+            sb.AppendLine("    if (shouldUpdate && (window as any).chrome?.webview) {");
             sb.AppendLine("      (window as any).chrome.webview.postMessage({");
             sb.AppendLine("        type: 'STATE_SET',");
             sb.AppendLine("        payload: { vmName, propName, value }");
@@ -138,7 +208,12 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();");
             sb.AppendLine("let _commandIdCounter = 0;");
             sb.AppendLine();
-            sb.AppendLine("// Listen for command responses from C# backend");
+            
+            sb.AppendLine("// ---- Event Subscriptions ----");
+            sb.AppendLine("const _eventSubscribers = new Map<string, Set<(args: any) => void>>();");
+            sb.AppendLine();
+
+            sb.AppendLine("// Listen for messages from C# backend");
             sb.AppendLine("if ((window as any).chrome?.webview) {");
             sb.AppendLine("  (window as any).chrome.webview.addEventListener('message', (event: any) => {");
             sb.AppendLine("    const data = event.data;");
@@ -148,6 +223,14 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("        _pendingCommands.delete(data.payload.requestId);");
             sb.AppendLine("        if (data.payload.success) { pending.resolve(data.payload.result); }");
             sb.AppendLine("        else { pending.reject(new Error(data.payload.error || 'Command failed')); }");
+            sb.AppendLine("      }");
+            sb.AppendLine("    }");
+            sb.AppendLine("    else if (data?.type === 'BACKEND_EVENT' && data.payload) {");
+            sb.AppendLine("      const subs = _eventSubscribers.get(`${data.payload.vmName}_${data.payload.eventName}`);");
+            sb.AppendLine("      if (subs) {");
+            sb.AppendLine("        subs.forEach(cb => {");
+            sb.AppendLine("          try { cb(data.payload.args); } catch (e) { console.error(e); }");
+            sb.AppendLine("        });");
             sb.AppendLine("      }");
             sb.AppendLine("    }");
             sb.AppendLine("  });");
@@ -189,11 +272,11 @@ namespace HybridApp.Core.Generators
                     .Where(m => m.GetCustomAttribute<SyncCommandAttribute>() != null)
                     .ToList();
 
-                if (commandMethods.Count == 0) continue;
-
-                foreach (var method in commandMethods)
+                if (commandMethods.Count > 0)
                 {
-                    var cmdAttr = method.GetCustomAttribute<SyncCommandAttribute>();
+                    foreach (var method in commandMethods)
+                    {
+                        var cmdAttr = method.GetCustomAttribute<SyncCommandAttribute>();
                     var returnType = method.ReturnType;
                     bool hasReturn = returnType != typeof(void);
                     string tsReturnType = hasReturn ? MapToTsType(returnType) : "void";
@@ -235,6 +318,67 @@ namespace HybridApp.Core.Generators
                         sb.AppendLine($"export function {vmName}_{method.Name}({paramsList}): void {{");
                         sb.AppendLine($"  invokeCommand('{vmName}', '{method.Name}', {argsObj});");
                     }
+                    sb.AppendLine("}");
+                    sb.AppendLine();
+                }
+            }
+
+            // --- Generate Event Listeners ---
+                var eventInfos = vm.GetEvents(BindingFlags.Public | BindingFlags.Instance)
+                    .Where(e => e.GetCustomAttribute<SyncEventAttribute>() != null)
+                    .ToList();
+
+                foreach (var ev in eventInfos)
+                {
+                    var evAttr = ev.GetCustomAttribute<SyncEventAttribute>();
+                    var handlerType = ev.EventHandlerType;
+                    string argTsType = "void";
+
+                    if (handlerType != null)
+                    {
+                        var invokeMethod = handlerType.GetMethod("Invoke");
+                        if (invokeMethod != null)
+                        {
+                            var parameters = invokeMethod.GetParameters();
+                            if (parameters.Length == 2 && parameters[0].ParameterType == typeof(object))
+                            {
+                                argTsType = MapToTsType(parameters[1].ParameterType);
+                            }
+                            else if (parameters.Length == 1)
+                            {
+                                argTsType = MapToTsType(parameters[0].ParameterType);
+                            }
+                        }
+                    }
+
+                    sb.AppendLine("/**");
+                    if (!string.IsNullOrEmpty(evAttr?.Description))
+                        sb.AppendLine($" * {evAttr.Description}");
+                    sb.AppendLine($" * @param callback Function to be called when the event is triggered");
+                    sb.AppendLine($" * @returns Function to unsubscribe from the event");
+                    sb.AppendLine(" */");
+                    
+                    if (argTsType == "void")
+                    {
+                        sb.AppendLine($"export function on{vmName}_{ev.Name}(callback: () => void): () => void {{");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"export function on{vmName}_{ev.Name}(callback: (args: {argTsType}) => void): () => void {{");
+                    }
+                    
+                    sb.AppendLine($"  const key = '{vmName}_{ev.Name}';");
+                    sb.AppendLine($"  if (!_eventSubscribers.has(key)) {{");
+                    sb.AppendLine($"    _eventSubscribers.set(key, new Set());");
+                    sb.AppendLine($"  }}");
+                    sb.AppendLine($"  _eventSubscribers.get(key)!.add(callback as any);");
+                    sb.AppendLine($"  return () => {{");
+                    sb.AppendLine($"    const subs = _eventSubscribers.get(key);");
+                    sb.AppendLine($"    if (subs) {{");
+                    sb.AppendLine($"      subs.delete(callback as any);");
+                    sb.AppendLine($"      if (subs.size === 0) _eventSubscribers.delete(key);");
+                    sb.AppendLine($"    }}");
+                    sb.AppendLine($"  }};");
                     sb.AppendLine("}");
                     sb.AppendLine();
                 }

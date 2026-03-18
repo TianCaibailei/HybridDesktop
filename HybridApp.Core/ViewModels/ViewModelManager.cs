@@ -79,6 +79,63 @@ namespace HybridApp.Core.ViewModels
 
             // 扫描并缓存该 VM 上所有 [SyncCommand] 标记的方法元数据
             RegisterCommands(vm);
+
+            // 扫描并注册所有 [SyncEvent] 标记的事件，以便将事件推送到前端
+            RegisterEvents(vm);
+        }
+
+        /// <summary>
+        /// 通过反射扫描 VM 上的 [SyncEvent] 事件，将其代理注册，使其触发时推送至前端
+        /// </summary>
+        private void RegisterEvents(SyncViewModelBase vm)
+        {
+            var events = vm.GetType().GetEvents(BindingFlags.Public | BindingFlags.Instance)
+                .Where(e => e.GetCustomAttribute<SyncEventAttribute>() != null);
+
+            foreach (var ev in events)
+            {
+                var eventHandlerType = ev.EventHandlerType;
+                if (eventHandlerType == null) continue;
+
+                var invokeMethod = eventHandlerType.GetMethod("Invoke");
+                if (invokeMethod == null) continue;
+
+                var parameters = invokeMethod.GetParameters();
+
+                Type argsType = typeof(object);
+                string targetMethodName;
+
+                if (parameters.Length == 2 && parameters[0].ParameterType == typeof(object))
+                {
+                    argsType = parameters[1].ParameterType;
+                    targetMethodName = nameof(EventProxy<object>.OnEventHandlerFired);
+                }
+                else if (parameters.Length == 1)
+                {
+                    argsType = parameters[0].ParameterType;
+                    targetMethodName = nameof(EventProxy<object>.OnActionFired);
+                }
+                else if (parameters.Length == 0)
+                {
+                    argsType = typeof(object); // Dummy
+                    targetMethodName = nameof(EventProxy<object>.OnActionZeroFired);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ManagerError] Event {ev.Name} signature not supported.");
+                    continue;
+                }
+
+                var proxyType = typeof(EventProxy<>).MakeGenericType(argsType);
+                var proxyInstance = Activator.CreateInstance(proxyType, this, vm.VmName, ev.Name);
+                if (proxyInstance == null) continue;
+
+                var proxyMethod = proxyType.GetMethod(targetMethodName);
+                if (proxyMethod == null) continue;
+
+                var delegateInstance = Delegate.CreateDelegate(eventHandlerType, proxyInstance, proxyMethod);
+                ev.AddEventHandler(vm, delegateInstance);
+            }
         }
 
         /// <summary>
@@ -291,6 +348,56 @@ namespace HybridApp.Core.ViewModels
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ManagerError] Failed to send full state: {ex.Message}");
+            }
+        }
+
+        public void SendEventToFrontend(string vmName, string eventName, object args)
+        {
+            if (_webView == null) return;
+
+            var message = new
+            {
+                type = "BACKEND_EVENT",
+                payload = new { vmName, eventName, args }
+            };
+
+            try
+            {
+                string json = JsonSerializer.Serialize(message, _jsonOptions);
+                _webView.PostWebMessageAsJson(json);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ManagerError] Failed to send BACKEND_EVENT: {ex.Message}");
+            }
+        }
+
+        private class EventProxy<TArgs>
+        {
+            private readonly ViewModelManager _manager;
+            private readonly string _vmName;
+            private readonly string _eventName;
+
+            public EventProxy(ViewModelManager manager, string vmName, string eventName)
+            {
+                _manager = manager;
+                _vmName = vmName;
+                _eventName = eventName;
+            }
+
+            public void OnEventHandlerFired(object sender, TArgs args)
+            {
+                _manager.SendEventToFrontend(_vmName, _eventName, args);
+            }
+
+            public void OnActionFired(TArgs args)
+            {
+                _manager.SendEventToFrontend(_vmName, _eventName, args);
+            }
+
+            public void OnActionZeroFired()
+            {
+                _manager.SendEventToFrontend(_vmName, _eventName, null);
             }
         }
     }

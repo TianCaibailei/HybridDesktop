@@ -13,10 +13,15 @@ public partial class MainForm : Form
     private TurntableVM _turntableVM = new TurntableVM();
     private CncPathVM _cncPathVM = new CncPathVM();
     private MaterialVM _materialVM = new MaterialVM();
-
+    private ToolVM _toolVM = new ToolVM();
+    private MachineVM _machineVM = new MachineVM();
+    private CncStatusVM _cncStatusVM = new CncStatusVM();
+    private ProduceDataVM _produceDataVM;
+    
     public MainForm()
     {
         InitializeComponent();
+        _produceDataVM = new ProduceDataVM(_machineVM);
         // 关键步骤：注册 CodePages 编码提供程序
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
@@ -55,16 +60,20 @@ public partial class MainForm : Form
         _vmManager.Register(_turntableVM);
         _vmManager.Register(_cncPathVM);
         _vmManager.Register(_materialVM);
+        _vmManager.Register(_toolVM);
+        _vmManager.Register(_machineVM);
+        _vmManager.Register(_cncStatusVM);
+        _vmManager.Register(_produceDataVM);
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG
-        var generator = new TsStoreGenerator();
-        string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
-        string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
-        if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
-        {
-            generator.Generate(frontendPath, typeof(Program).Assembly);
-        }
+        //var generator = new TsStoreGenerator();
+        //string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
+        //string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
+        //if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
+        //{
+        //    generator.Generate(frontendPath, typeof(Program).Assembly);
+        //}
 #endif
 
         // 4. 设置虚拟域名映射
@@ -73,7 +82,8 @@ public partial class MainForm : Form
         if (!Directory.Exists(distFolderPath))
         {
             // 开发时 dist 可能位于前端项目目录
-            string devDistPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "IndustrialMonitor.Frontend", "dist"));
+            //string devDistPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "IndustrialMonitor.Frontend", "dist"));
+            string devDistPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dist"));
             if (Directory.Exists(devDistPath))
                 distFolderPath = devDistPath;
         }
@@ -104,11 +114,9 @@ public partial class MainForm : Form
         // 5. 导航到主页面
         webView.CoreWebView2.Navigate("http://industrial-monitor.app/index.html");
 
-        // 6. 发送全量状态
-        webView.CoreWebView2.DOMContentLoaded += (s, ev) =>
-        {
-            _vmManager.SendFullState();
-        };
+        // 6. 移除旧的后端主动推送状态逻辑
+        // 因为 WebView 导航完成时，前端 React JS 可能还没挂载，从而造成数据丢失。
+        // 现在改为前端挂载 useEffect 后通过 POST INIT_REQUEST 主动向后端拉取（见 App.tsx）。
     }
 
     private void btnLoadNc_Click(object sender, EventArgs e)
@@ -155,5 +163,25 @@ public partial class MainForm : Form
         {
             _monitorVM.Utilization = Math.Round((double)_monitorVM.OutputCount / _monitorVM.InputCount * 100, 1);
         }
+    }
+
+    private void btnAlarm_Click(object sender, EventArgs e)
+    {
+        _machineVM.TriggerTestAlarm();
+    }
+
+    private void btnClearAlarm_Click(object sender, EventArgs e)
+    {
+        _machineVM.ClearAlarm();
+    }
+
+    private void btnInfo_Click(object sender, EventArgs e)
+    {
+        _machineVM.TriggerTestInfo();
+    }
+
+    private void btnClearInfo_Click(object sender, EventArgs e)
+    {
+        _machineVM.ClearInfo();
     }
 }

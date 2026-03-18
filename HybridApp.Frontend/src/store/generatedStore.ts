@@ -100,11 +100,41 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
   }),
   setBackendState: (vmName, propName, value) => {
     const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
-    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
-    // 1. Update Local Store
-    set((state) => ({ ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } }));
-    // 2. Push to C# Backend
-    if ((window as any).chrome?.webview) {
+    const isPath = propName.includes('.') || propName.includes('[');
+    let shouldUpdate = false;
+    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)
+    if (!isPath) {
+      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
+      set((state) => {
+        const currentState = (state as any)[stateKey];
+        if (currentState && currentState[propKey] === value) return state;
+        shouldUpdate = true;
+        return { ...state, [stateKey]: { ...currentState, [propKey]: value } };
+      });
+    } else {
+      // Support deep property update locally using mutative approach
+      set((state) => {
+         const newState = { ...state };
+         const vmState = { ...(newState as any)[stateKey] };
+         // Basic path parser for local immediate response
+         let current: any = vmState;
+         const parts = propName.split(/[.\]\[]/g).filter(Boolean);
+         for (let i = 0; i < parts.length - 1; i++) {
+             const p = parts[i];
+             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;
+             if (current[key] !== undefined) current = current[key];
+         }
+         const lastPart = parts[parts.length - 1];
+         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;
+         if (current[lastKey] === value) return state;
+         shouldUpdate = true;
+         current[lastKey] = value;
+         newState[stateKey as keyof AppState] = vmState as any;
+         return newState;
+      });
+    }
+    // 2. Push to C# Backend only if value changed
+    if (shouldUpdate && (window as any).chrome?.webview) {
       (window as any).chrome.webview.postMessage({
         type: 'STATE_SET',
         payload: { vmName, propName, value }
@@ -126,7 +156,10 @@ export const useAppStore = create<AppState & AppActions>((set) => ({
 const _pendingCommands = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();
 let _commandIdCounter = 0;
 
-// Listen for command responses from C# backend
+// ---- Event Subscriptions ----
+const _eventSubscribers = new Map<string, Set<(args: any) => void>>();
+
+// Listen for messages from C# backend
 if ((window as any).chrome?.webview) {
   (window as any).chrome.webview.addEventListener('message', (event: any) => {
     const data = event.data;
@@ -136,6 +169,14 @@ if ((window as any).chrome?.webview) {
         _pendingCommands.delete(data.payload.requestId);
         if (data.payload.success) { pending.resolve(data.payload.result); }
         else { pending.reject(new Error(data.payload.error || 'Command failed')); }
+      }
+    }
+    else if (data?.type === 'BACKEND_EVENT' && data.payload) {
+      const subs = _eventSubscribers.get(`${data.payload.vmName}_${data.payload.eventName}`);
+      if (subs) {
+        subs.forEach(cb => {
+          try { cb(data.payload.args); } catch (e) { console.error(e); }
+        });
       }
     }
   });

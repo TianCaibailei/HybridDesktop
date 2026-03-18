@@ -40,6 +40,18 @@ This framework introduces unmatched decoupling logic for back and frontend teams
 #### 2. For Frontend Developers
 
 *   **Adopt Repositories & Generated Stores**: Once C# colleagues enact generators, your front-end repository contains an out-of-the-box global state hook titled `useAppStore`. You do not need to configure any manual IPC definitions, EventListeners, nor any mapping schemas.
+    *   **Crucial Initialization Step**: To ensure state consistency preventing race conditions (like F5 refreshes), simply mount a message listener and post an `INIT_REQUEST` to the backend when your React App mounts:
+        ```tsx
+        // App.tsx
+        useEffect(() => {
+            if ((window as any).chrome?.webview) {
+                const handler = (event: any) => { /* handle INIT_RESPONSE and STATE_SYNC */ };
+                (window as any).chrome.webview.addEventListener('message', handler);
+                (window as any).chrome.webview.postMessage({ type: 'INIT_REQUEST' });
+                return () => (window as any).chrome.webview.removeEventListener('message', handler);
+            }
+        }, []);
+        ```
 *   **Start Constructing Responsive Data Driven Interfaces**:
     *   **Pull Configurations**: Read them strictly via typed environments dynamically: `const exposure = useAppStore(state => state.VisionVM.Exposure);`
     *   **Execute Parameters Settings**: Simply utilize its innate generated function methodologies to interact back with hardware APIs without requesting manual contracts: `useAppStore(state => state.setBackendState("VisionVM", "Exposure", newValue))`
