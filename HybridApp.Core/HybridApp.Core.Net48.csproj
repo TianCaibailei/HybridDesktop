@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>HybridApp.Core</AssemblyName>
+    <RootNamespace>HybridApp.Core</RootNamespace>
+    <OutputPath>bin\$(Configuration)\net48\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!-- 排除 .NET 8 专用的 csproj，避免冲突 -->
+  <ItemGroup>
+    <None Remove="HybridApp.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ViewModels\SyncViewModelBase.utf8.cs" />
+    <Compile Remove="ViewModels\VisionVM.utf8.cs" />
+  </ItemGroup>
+
+  <!-- System.Text.Json 在 .NET Framework 4.8 中需要通过 NuGet 引入 -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3848-prerelease" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <!-- .NET Framework 4.8 需要显式引用这些程序集 -->
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.ObjectModel" />
+    <Reference Include="System.Runtime" />
+  </ItemGroup>
+
+</Project>

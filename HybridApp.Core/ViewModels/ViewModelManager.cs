@@ -19,7 +19,7 @@ namespace HybridApp.Core.ViewModels
         /// <summary>
         /// 命令元数据缓存：_commands[vmName][methodName] = CommandInfo
         /// </summary>
-        private readonly Dictionary<string, Dictionary<string, CommandInfo>> _commands = new();
+        private readonly Dictionary<string, Dictionary<string, CommandInfo>> _commands = new Dictionary<string, Dictionary<string, CommandInfo>>();
 
         /// <summary>
         /// 命令元数据，记录方法反射信息、参数列表和返回值类型

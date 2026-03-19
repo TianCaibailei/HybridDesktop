@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -30,12 +31,12 @@ namespace HybridApp.Core.ViewModels
         /// 存储每个被监听属性的事件处理器引用，确保可以正确 -= 取消订阅。
         /// Key = "属性路径:对象HashCode"，Value = handler 引用
         /// </summary>
-        private readonly Dictionary<string, PropertyChangedEventHandler> _watchedHandlers = new();
+        private readonly Dictionary<string, PropertyChangedEventHandler> _watchedHandlers = new Dictionary<string, PropertyChangedEventHandler>();
         
         /// <summary>
         /// 存储集合变更事件处理器引用
         /// </summary>
-        private readonly Dictionary<string, NotifyCollectionChangedEventHandler> _watchedCollectionHandlers = new();
+        private readonly Dictionary<string, NotifyCollectionChangedEventHandler> _watchedCollectionHandlers = new Dictionary<string, NotifyCollectionChangedEventHandler>();
 
         /// <summary>
         /// 防止循环引用导致的无限递归
@@ -150,7 +151,7 @@ namespace HybridApp.Core.ViewModels
                     currentTarget = nextTarget;
                 }
 
-                var lastPart = pathParts[^1];
+                var lastPart = pathParts[pathParts.Length - 1];
                 
                 // 判断最后一个节点是属性还是索引
                 if (int.TryParse(lastPart, out targetIndex) && currentTarget is System.Collections.IList finalCollection)

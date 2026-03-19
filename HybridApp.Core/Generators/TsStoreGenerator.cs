@@ -14,7 +14,7 @@ namespace HybridApp.Core.Generators
         private readonly HashSet<Type> _discoveredTypes = new HashSet<Type>();
         private readonly List<Type> _typesToGenerate = new List<Type>();
 
-        public void Generate(string outputPath, Assembly? targetAssembly = null)
+        public void Generate(string outputPath, Assembly targetAssembly = null)
         {
             var assemblies = targetAssembly != null 
                 ? new[] { targetAssembly } 

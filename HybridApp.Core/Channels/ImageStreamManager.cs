@@ -6,7 +6,7 @@ namespace HybridApp.Core.Channels
 {
     public class ImageStreamManager
     {
-        public Func<string, byte[]?>? OnImageRequested { get; set; }
+        public Func<string, byte[]> OnImageRequested { get; set; }
 
         public void Attach(CoreWebView2 webView)
         {
