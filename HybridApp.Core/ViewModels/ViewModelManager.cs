@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using HybridApp.Core.Attributes;
 using Microsoft.Web.WebView2.Core;
 
@@ -15,6 +16,7 @@ namespace HybridApp.Core.ViewModels
     {
         private readonly Dictionary<string, SyncViewModelBase> _vms = new Dictionary<string, SyncViewModelBase>();
         private CoreWebView2 _webView;
+        private SynchronizationContext _syncContext; // 用于跨线程调用时切换到 UI 线程（支持 WinForms/WPF）
 
         /// <summary>
         /// 命令元数据缓存：_commands[vmName][methodName] = CommandInfo
@@ -41,9 +43,12 @@ namespace HybridApp.Core.ViewModels
         /// <summary>
         /// 挂载 WebView2 并开始监听消息
         /// </summary>
-        public void Attach(CoreWebView2 webView)
+        /// <param name="webView">WebView2 实例</param>
+        /// <param name="syncContext">同步上下文，用于跨线程消息发送。不传则自动使用 SynchronizationContext.Current</param>
+        public void Attach(CoreWebView2 webView, SynchronizationContext syncContext = null)
         {
             _webView = webView;
+            _syncContext = syncContext ?? SynchronizationContext.Current;
             _webView.WebMessageReceived += OnWebMessageReceived;
         }
 
@@ -58,6 +63,7 @@ namespace HybridApp.Core.ViewModels
             _vms[vm.VmName] = vm;
 
             // 自动配置同步联动：当后端 C# 属性变化时，自动序列化并推送到前端
+            // 传入 SynchronizationContext 确保 PropertyChanged 事件在 UI 线程触发（解决 WinForms DataBindings 跨线程问题）
             vm.AttachSyncAction((vmName, propName, value) =>
             {
                 var message = new
@@ -75,7 +81,7 @@ namespace HybridApp.Core.ViewModels
                 {
                     System.Diagnostics.Debug.WriteLine($"[SyncError] Failed to push state to web: {ex.Message}");
                 }
-            });
+            }, _syncContext);
 
             // 扫描并缓存该 VM 上所有 [SyncCommand] 标记的方法元数据
             RegisterCommands(vm);
@@ -305,19 +311,32 @@ namespace HybridApp.Core.ViewModels
         {
             if (requestId == null || _webView == null) return;
 
-            try
+            void SendResponse()
             {
-                var response = new
+                try
                 {
-                    type = "COMMAND_RESPONSE",
-                    payload = new { requestId, success, result, error }
-                };
-                string json = JsonSerializer.Serialize(response, _jsonOptions);
-                _webView.PostWebMessageAsJson(json);
+                    var response = new
+                    {
+                        type = "COMMAND_RESPONSE",
+                        payload = new { requestId, success, result, error }
+                    };
+                    string json = JsonSerializer.Serialize(response, _jsonOptions);
+                    _webView.PostWebMessageAsJson(json);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CommandError] Failed to send response: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+
+            // 如果提供了同步上下文且当前不在 UI 线程，则切换到 UI 线程
+            if (_syncContext != null && _syncContext != SynchronizationContext.Current)
             {
-                System.Diagnostics.Debug.WriteLine($"[CommandError] Failed to send response: {ex.Message}");
+                _syncContext.Post(_ => SendResponse(), null);
+            }
+            else
+            {
+                SendResponse();
             }
         }
 
@@ -355,20 +374,33 @@ namespace HybridApp.Core.ViewModels
         {
             if (_webView == null) return;
 
-            var message = new
+            void SendEvent()
             {
-                type = "BACKEND_EVENT",
-                payload = new { vmName, eventName, args }
-            };
+                var message = new
+                {
+                    type = "BACKEND_EVENT",
+                    payload = new { vmName, eventName, args }
+                };
 
-            try
-            {
-                string json = JsonSerializer.Serialize(message, _jsonOptions);
-                _webView.PostWebMessageAsJson(json);
+                try
+                {
+                    string json = JsonSerializer.Serialize(message, _jsonOptions);
+                    _webView.PostWebMessageAsJson(json);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ManagerError] Failed to send BACKEND_EVENT: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+
+            // 如果提供了同步上下文且当前不在 UI 线程，则切换到 UI 线程
+            if (_syncContext != null && _syncContext != SynchronizationContext.Current)
             {
-                System.Diagnostics.Debug.WriteLine($"[ManagerError] Failed to send BACKEND_EVENT: {ex.Message}");
+                _syncContext.Post(_ => SendEvent(), null);
+            }
+            else
+            {
+                SendEvent();
             }
         }
 
