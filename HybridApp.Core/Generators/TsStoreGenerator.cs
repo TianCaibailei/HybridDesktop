@@ -94,10 +94,13 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("import { create } from 'zustand';");
             sb.AppendLine();
             
-            // 2. Generate actual interface definitions from the discovered list
+            // 2. Generate actual interface/enum definitions from the discovered list
             foreach (var type in _typesToGenerate)
             {
-                sb.Append(BuildInterfaceString(type));
+                if (type.IsEnum)
+                    sb.Append(BuildEnumString(type));
+                else
+                    sb.Append(BuildInterfaceString(type));
             }
 
             // 3. Generate AppState Interface
@@ -412,6 +415,13 @@ namespace HybridApp.Core.Generators
                     queue.Enqueue(underlyingType);
                 }
             }
+            else if (underlyingType.IsEnum)
+            {
+                if (!_discoveredTypes.Contains(underlyingType))
+                {
+                    queue.Enqueue(underlyingType);
+                }
+            }
         }
 
         private string BuildInterfaceString(Type type)
@@ -452,6 +462,28 @@ namespace HybridApp.Core.Generators
             return sb.ToString();
         }
 
+        private string BuildEnumString(Type type)
+        {
+            var sb = new StringBuilder();
+            var enumName = type.Name;
+
+            sb.AppendLine($"export enum {enumName} {{");
+
+            var names = Enum.GetNames(type);
+            var values = Enum.GetValues(type);
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                var name = names[i];
+                var value = Convert.ToInt32(values.GetValue(i));
+                sb.AppendLine($"  {name} = {value},");
+            }
+
+            sb.AppendLine("}");
+            sb.AppendLine();
+            return sb.ToString();
+        }
+
         private string MapToTsType(Type type)
         {
             var underlyingType = Nullable.GetUnderlyingType(type);
@@ -475,6 +507,10 @@ namespace HybridApp.Core.Generators
             else if (targetType == typeof(DateTime) || targetType == typeof(DateTimeOffset))
             {
                 tsType = "string";
+            }
+            else if (targetType.IsEnum)
+            {
+                tsType = targetType.Name;
             }
             else if (targetType.IsArray)
             {
