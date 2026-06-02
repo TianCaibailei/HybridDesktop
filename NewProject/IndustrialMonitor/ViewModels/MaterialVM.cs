@@ -15,7 +15,7 @@ namespace IndustrialMonitor.ViewModels
 
     public class MaterialItem : ObservableObject
     {
-        private string _stationState = "空";
+        private string _stationState = "空闲";
         private int _station = 1;
         private string _priority = "★★★";
         private double _blankLength = 141.0;
@@ -28,45 +28,53 @@ namespace IndustrialMonitor.ViewModels
         private double _productWidth = 57.3;
         private int _arrayCount = 1;
         private double _arraySpacing = 6.5;
+        private bool _isLightCut;
+        private double _minZValue;
 
         [SyncProperty(Description = "工位状态")]
         public string StationState { get => _stationState; set => Set(ref _stationState, value); }
-        
+
         [SyncProperty(Description = "工位序号")]
         public int Station { get => _station; set => Set(ref _station, value); }
-        
+
         [SyncProperty(Description = "优先级")]
         public string Priority { get => _priority; set => Set(ref _priority, value); }
-        
+
         [SyncProperty(Description = "毛长")]
         public double BlankLength { get => _blankLength; set => Set(ref _blankLength, value); }
-        
+
         [SyncProperty(Description = "毛宽")]
         public double BlankWidth { get => _blankWidth; set => Set(ref _blankWidth, value); }
-        
+
         [SyncProperty(Description = "加工文件")]
         public string NcFile { get => _ncFile; set => Set(ref _ncFile, value); }
-        
+
         [SyncProperty(Description = "分中")]
         public double CenterDivide { get => _centerDivide; set => Set(ref _centerDivide, value); }
-        
+
         [SyncProperty(Description = "偏值Z")]
         public double OffsetZ { get => _offsetZ; set => Set(ref _offsetZ, value); }
-        
+
         [SyncProperty(Description = "角度")]
         public double Angle { get => _angle; set => Set(ref _angle, value); }
-        
+
         [SyncProperty(Description = "产品长")]
         public double ProductLength { get => _productLength; set => Set(ref _productLength, value); }
-        
+
         [SyncProperty(Description = "产品宽")]
         public double ProductWidth { get => _productWidth; set => Set(ref _productWidth, value); }
-        
+
         [SyncProperty(Description = "阵列数")]
         public int ArrayCount { get => _arrayCount; set => Set(ref _arrayCount, value); }
-        
+
         [SyncProperty(Description = "阵列间")]
         public double ArraySpacing { get => _arraySpacing; set => Set(ref _arraySpacing, value); }
+
+        [SyncProperty(Description = "是否光刀")]
+        public bool IsLightCut { get => _isLightCut; set => Set(ref _isLightCut, value); }
+
+        [SyncProperty(Description = "最小Z值")]
+        public double MinZValue { get => _minZValue; set => Set(ref _minZValue, value); }
     }
 
     [SyncViewModel("MaterialVM", Description = "物料信息展示数据层")]
@@ -79,13 +87,13 @@ namespace IndustrialMonitor.ViewModels
             // 初始化一些 Mock 数据
             Random rnd = new Random();
             string[] stars = { "★", "★★", "★★★", "★★★★", "★★★★★" };
-            
+
             for (int i = 1; i <= 14; i++)
             {
                 _materials.Add(new MaterialItem
                 {
                     Station = i,
-                    StationState = "空",
+                    StationState = "空闲",
                     Priority = stars[rnd.Next(stars.Length)],
                     BlankLength = 141,
                     BlankWidth = 60,
@@ -96,7 +104,9 @@ namespace IndustrialMonitor.ViewModels
                     ProductLength = 40,
                     ProductWidth = 57.3,
                     ArrayCount = 1,
-                    ArraySpacing = 6.5
+                    ArraySpacing = 6.5,
+                    IsLightCut = false,
+                    MinZValue = 0
                 });
             }
         }
@@ -112,7 +122,7 @@ namespace IndustrialMonitor.ViewModels
         public string SelectNcFile()
         {
             string selectedPath = null;
-            
+
             // OpenFileDialog must run in STA thread
             var thread = new Thread(() =>
             {
@@ -126,7 +136,7 @@ namespace IndustrialMonitor.ViewModels
                     }
                 }
             });
-            
+
             thread.SetApartmentState(ApartmentState.STA);
             thread.Start();
             thread.Join();
@@ -171,6 +181,8 @@ namespace IndustrialMonitor.ViewModels
             target.ProductWidth = draftData.ProductWidth;
             target.ArrayCount = draftData.ArrayCount;
             target.ArraySpacing = draftData.ArraySpacing;
+            target.IsLightCut = draftData.IsLightCut;
+            target.MinZValue = draftData.MinZValue;
 
             return new FormResult { Success = true, Message = "保存成功" };
         }
@@ -186,7 +198,7 @@ namespace IndustrialMonitor.ViewModels
             foreach (var idx in stationIndices)
             {
                 if (idx < 0 || idx >= _materials.Count) continue;
-                
+
                 var target = _materials[idx];
                 target.Priority = templateData.Priority;
                 target.BlankLength = templateData.BlankLength;
@@ -199,6 +211,8 @@ namespace IndustrialMonitor.ViewModels
                 target.ProductWidth = templateData.ProductWidth;
                 target.ArrayCount = templateData.ArrayCount;
                 target.ArraySpacing = templateData.ArraySpacing;
+                target.IsLightCut = templateData.IsLightCut;
+                target.MinZValue = templateData.MinZValue;
             }
 
             return new FormResult { Success = true, Message = $"已成功应用到 {stationIndices.Length} 个工位" };

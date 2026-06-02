@@ -67,13 +67,13 @@ public partial class MainForm : Form
 
         // 3. 生成 TS Store (Debug only)
 #if DEBUG
-        //var generator = new TsStoreGenerator();
-        //string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
-        //string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
-        //if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
-        //{
-        //    generator.Generate(frontendPath, typeof(Program).Assembly);
-        //}
+        var generator = new TsStoreGenerator();
+        string projectRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", ".."));
+        string frontendPath = Path.Combine(projectRoot, "IndustrialMonitor.Frontend", "src", "store", "generatedStore.ts");
+        if (Directory.Exists(Path.GetDirectoryName(frontendPath)))
+        {
+           generator.Generate(frontendPath, typeof(Program).Assembly);
+        }
 #endif
 
         // 4. 设置虚拟域名映射
