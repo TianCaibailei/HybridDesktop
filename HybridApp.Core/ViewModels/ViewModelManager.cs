@@ -66,20 +66,32 @@ namespace HybridApp.Core.ViewModels
             // 传入 SynchronizationContext 确保 PropertyChanged 事件在 UI 线程触发（解决 WinForms DataBindings 跨线程问题）
             vm.AttachSyncAction((vmName, propName, value) =>
             {
-                var message = new
+                void SendStateSync()
                 {
-                    type = "STATE_SYNC",
-                    payload = new { vmName, propName, value }
-                };
-                
-                try
-                {
-                    string json = JsonSerializer.Serialize(message, _jsonOptions);
-                    _webView.PostWebMessageAsJson(json);
+                    var message = new
+                    {
+                        type = "STATE_SYNC",
+                        payload = new { vmName, propName, value }
+                    };
+
+                    try
+                    {
+                        string json = JsonSerializer.Serialize(message, _jsonOptions);
+                        _webView.PostWebMessageAsJson(json);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SyncError] Failed to push state to web: {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
+
+                if (_syncContext != null && _syncContext != SynchronizationContext.Current)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[SyncError] Failed to push state to web: {ex.Message}");
+                    _syncContext.Post(_ => SendStateSync(), null);
+                }
+                else
+                {
+                    SendStateSync();
                 }
             }, _syncContext);
 

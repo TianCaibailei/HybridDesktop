@@ -111,12 +111,24 @@ namespace HybridApp.Core.ViewModels
         /// </summary>
         public void ManualSync(string propertyName)
         {
-            var propInfo = this.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
-            if (propInfo == null) return;
+            void Sync()
+            {
+                var propInfo = this.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+                if (propInfo == null) return;
 
-            var value = propInfo.GetValue(this);
-            OnPropertyChanged(propertyName);
-            _syncAction?.Invoke(VmName, propertyName, value);
+                var value = propInfo.GetValue(this);
+                OnPropertyChanged(propertyName);
+                _syncAction?.Invoke(VmName, propertyName, value);
+            }
+
+            if (_syncContext != null && _syncContext != SynchronizationContext.Current)
+            {
+                _syncContext.Post(_ => Sync(), null);
+            }
+            else
+            {
+                Sync();
+            }
         }
 
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = "")
