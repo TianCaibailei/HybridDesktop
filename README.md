@@ -21,6 +21,7 @@ The backend (C#) directly defines and serves as the sole source of core state da
    - **Shared Memory Data Path (`FloatDataChannel`)**: Capitalizes on WebView2's internal SharedBuffer. Sends successive raw data chunks (like sensors or PLCs readings) via backend. Frontends extract the real `Float32Array` memory chunks using guaranteed **Zero-Copy** architectures allowing unlimited ultra-frequency capabilities.
 4. **Strong Typing and Automation Engine**: Contains the automatic `TsStoreGenerator`. Designs structured across the C# environment can be extracted automatically into frontend production-level TypeScript Interfaces with integrated Store Managers with one single keystroke. Complete end-to-end type safety in entirely quarantined architectures.
 5. **Strongly-Typed Command Bus**: Going beyond state synchronization, a dedicated `[SyncCommand]` attribute is included. Mark any C# method to instantly generate a strongly-typed TypeScript invocation function (including parameters, return types, and JSDoc comments). The frontend can call C# logic directly via `await VisionVM_GetStatusSummary("prefix")`, with seamless Promise-based return value handling and zero manual routing code.
+6. **Multi-Instance ViewModel Synchronization**: Register multiple runtime instances from the same ViewModel type, each with its own `VmName` while sharing one stable `VmType`. The generated store keeps both the default single-instance state and an instance dictionary such as `visionVMInstances`, so multi-camera, multi-station, and multi-axis control screens can reuse one typed contract without duplicating ViewModel classes.
 
 ---
 
@@ -59,3 +60,83 @@ This framework introduces unmatched decoupling logic for back and frontend teams
 *   **Consume Powerful Stream Telemetry Realtime Displays**:
     *   **Rendering Raw Machine Vision Views**: Drop the component directly into React flows: `<ImageStream channel="camera1" />`. High definition frames sync immediately over virtual pipes.
     *   **Consuming Mass Metric Waveform Arrays**: Utilize custom hooks fetching shared fragments instantly mapped against memory ranges without serializations: `const { getActiveData, tick } = useSharedBuffer('LaserSensor')` and feed payload arrays right into libraries like ECharts.
+
+#### 3. Multi-Instance ViewModel Case
+
+Use multi-instance synchronization when one screen needs to control several devices that share the same data shape and commands, for example left/right cameras, multiple CNC stations, or several motion axes. Each instance has a unique `VmName` for routing, while `VmType` keeps the generated TypeScript contract tied to the original class.
+
+**Backend registration example:**
+
+```csharp
+// VisionVM keeps its generated type name as "VisionVM".
+// Different constructor names create independent runtime instances.
+var leftCamera = new VisionVM("LeftCamera");
+var rightCamera = new VisionVM("RightCamera");
+
+_vmManager.Register(leftCamera);
+_vmManager.Register(rightCamera);
+
+leftCamera.Exposure = 25;
+rightCamera.Exposure = 60;
+```
+
+The backend sends state payloads with both identifiers:
+
+```json
+{
+  "type": "STATE_SYNC",
+  "payload": {
+    "vmType": "VisionVM",
+    "vmName": "LeftCamera",
+    "propName": "Exposure",
+    "value": 25
+  }
+}
+```
+
+**Frontend state usage:**
+
+```tsx
+import {
+  useAppStore,
+  VisionVM_GetStatusSummaryFor,
+  VisionVM_ToggleRunningFor,
+} from './store/generatedStore';
+
+function CameraPanel() {
+  const leftCamera = useAppStore(state => state.visionVMInstances.LeftCamera);
+  const rightCamera = useAppStore(state => state.visionVMInstances.RightCamera);
+  const setBackendInstanceState = useAppStore(state => state.setBackendInstanceState);
+
+  return (
+    <section>
+      <input
+        type="range"
+        min={1}
+        max={100}
+        value={leftCamera?.exposure ?? 10}
+        onChange={e =>
+          setBackendInstanceState("VisionVM", "LeftCamera", "Exposure", Number(e.target.value))
+        }
+      />
+
+      <button onClick={() => VisionVM_ToggleRunningFor("RightCamera", "operator-check")}>
+        Toggle right camera
+      </button>
+
+      <button
+        onClick={async () => {
+          const summary = await VisionVM_GetStatusSummaryFor("LeftCamera", "LEFT");
+          console.log(summary);
+        }}
+      >
+        Read left summary
+      </button>
+
+      <pre>{JSON.stringify({ leftCamera, rightCamera }, null, 2)}</pre>
+    </section>
+  );
+}
+```
+
+For compatibility, the default instance name still works exactly like before: `setBackendState("VisionVM", "Exposure", value)` writes to the default `VisionVM` instance. When targeting a named instance, prefer `setBackendInstanceState(vmType, vmName, propName, value)` or the generated `...For(vmName, ...)` command wrappers.

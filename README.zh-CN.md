@@ -21,6 +21,7 @@ HybridDesktop 是一个专为工控、非标自动化和视觉检测等高性能
    - **共享内存通道 (`FloatDataChannel`)**：借由 WebView2 的内部 SharedBuffer 机制传输连续数组信号（如雷达、激光测距仪数据），使得前端以真正 **零拷贝 (Zero-Copy)** 的方式取得 `Float32Array`，轻松支持超高频海量信号。
 4. **强类型与全链路自动化**：内置 `TsStoreGenerator` 代码生成器引擎。在 C# 端设计好的结构，一键就能导出成为前端开箱即用的 TypeScript 接口层与状态管理器，使得前、后端即使完全隔离，依然能保持丝丝入扣的类型安全协同。
 5. **强类型命令执行总线**：不仅仅是状态同步，框架更提供了基于 `[SyncCommand]` 的专属指令通道。只需在 C# 方法上打上特性标记，即可自动在前端生成全强类型的 TypeScript 包装函数（含参数签名、返回值 Promise 与 JSDoc 注释）。前端只需一行 `await VisionVM_GetStatusSummary("prefix")` 即可无缝调用后端业务逻辑并等待返回值，全程零手动路由注册。
+6. **ViewModel 多实例同步支持**：同一个 ViewModel 类型可以注册多个运行时实例，每个实例拥有独立的 `VmName`，并共享稳定的 `VmType`。生成的前端 Store 会同时保留默认单实例状态，以及类似 `visionVMInstances` 的实例字典，适合多相机、多工位、多轴控制等场景复用同一套强类型契约。
 
 ---
 
@@ -60,3 +61,83 @@ HybridDesktop 是一个专为工控、非标自动化和视觉检测等高性能
 *   **渲染工业数据高频信号/海量数据流**：
     *   **对付实时工业相机画面**：直接将提供的业务组件引入 React 渲染流 `<ImageStream channel="camera1" />` 即可直接拉取高清图并上屏。
     *   **对付数百赫兹的高频波形图**：使用自定义 Hook 提取零拷贝内存切片： `const { getActiveData, tick } = useSharedBuffer('LaserSensor')` 得到安全的并实时翻盘变化的数据段，塞给 ECharts 等图表做绘制操作。
+
+#### 3. ViewModel 多实例案例
+
+当一个界面需要控制多台同类型设备时，可以使用多实例同步能力，例如左右相机、多个 CNC 工位、多个运动轴。每个实例通过唯一的 `VmName` 做消息路由，`VmType` 则保持为原始类型名，用于匹配生成出来的 TypeScript 类型、状态字典和命令包装函数。
+
+**后端注册示例：**
+
+```csharp
+// VisionVM 的生成类型仍然是 "VisionVM"。
+// 构造函数传入不同名称，即可得到相互独立的运行时实例。
+var leftCamera = new VisionVM("LeftCamera");
+var rightCamera = new VisionVM("RightCamera");
+
+_vmManager.Register(leftCamera);
+_vmManager.Register(rightCamera);
+
+leftCamera.Exposure = 25;
+rightCamera.Exposure = 60;
+```
+
+后端同步消息会同时携带 `vmType` 和 `vmName`：
+
+```json
+{
+  "type": "STATE_SYNC",
+  "payload": {
+    "vmType": "VisionVM",
+    "vmName": "LeftCamera",
+    "propName": "Exposure",
+    "value": 25
+  }
+}
+```
+
+**前端使用示例：**
+
+```tsx
+import {
+  useAppStore,
+  VisionVM_GetStatusSummaryFor,
+  VisionVM_ToggleRunningFor,
+} from './store/generatedStore';
+
+function CameraPanel() {
+  const leftCamera = useAppStore(state => state.visionVMInstances.LeftCamera);
+  const rightCamera = useAppStore(state => state.visionVMInstances.RightCamera);
+  const setBackendInstanceState = useAppStore(state => state.setBackendInstanceState);
+
+  return (
+    <section>
+      <input
+        type="range"
+        min={1}
+        max={100}
+        value={leftCamera?.exposure ?? 10}
+        onChange={e =>
+          setBackendInstanceState("VisionVM", "LeftCamera", "Exposure", Number(e.target.value))
+        }
+      />
+
+      <button onClick={() => VisionVM_ToggleRunningFor("RightCamera", "operator-check")}>
+        切换右相机运行状态
+      </button>
+
+      <button
+        onClick={async () => {
+          const summary = await VisionVM_GetStatusSummaryFor("LeftCamera", "LEFT");
+          console.log(summary);
+        }}
+      >
+        读取左相机摘要
+      </button>
+
+      <pre>{JSON.stringify({ leftCamera, rightCamera }, null, 2)}</pre>
+    </section>
+  );
+}
+```
+
+为了兼容原有单实例写法，默认实例名仍然可以照旧使用：`setBackendState("VisionVM", "Exposure", value)` 会写入默认的 `VisionVM` 实例。需要操作具名实例时，推荐使用 `setBackendInstanceState(vmType, vmName, propName, value)`，或者使用生成出来的 `...For(vmName, ...)` 命令包装函数。
