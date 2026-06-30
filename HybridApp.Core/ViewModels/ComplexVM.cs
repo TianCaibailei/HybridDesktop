@@ -77,7 +77,7 @@ namespace HybridApp.Core.ViewModels
         };
         private ObservableCollection<LogEntry> _logs = new ObservableCollection<LogEntry>();
 
-        public ComplexVM() : base("ComplexVM") 
+        public ComplexVM(string vmName = "ComplexVM") : base(vmName) 
         {
             // ✅ 无需任何手动订阅！
             // 基类 SyncViewModelBase 会在 AttachSyncAction 时自动递归监听所有嵌套 INPC 对象。

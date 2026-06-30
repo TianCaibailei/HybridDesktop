@@ -93,6 +93,43 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("// Do not edit manually");
             sb.AppendLine("import { create } from 'zustand';");
             sb.AppendLine();
+            sb.AppendLine("type PatchResult = { nextVm: any; changed: boolean };");
+            sb.AppendLine();
+            sb.AppendLine("function toCamel(value: string): string {");
+            sb.AppendLine("  if (!value) return value;");
+            sb.AppendLine("  return value.charAt(0).toLowerCase() + value.slice(1);");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("function getInstanceStoreKey(vmType: string): string {");
+            sb.AppendLine("  return `${toCamel(vmType)}Instances`;");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("function patchVmState(vmState: any, propName: string, value: any): PatchResult {");
+            sb.AppendLine("  const isPath = propName.includes('.') || propName.includes('[');");
+            sb.AppendLine("  const nextVm = { ...(vmState ?? {}) };");
+            sb.AppendLine("  if (!isPath) {");
+            sb.AppendLine("    const propKey = toCamel(propName);");
+            sb.AppendLine("    if (nextVm[propKey] === value) return { nextVm: vmState, changed: false };");
+            sb.AppendLine("    nextVm[propKey] = value;");
+            sb.AppendLine("    return { nextVm, changed: true };");
+            sb.AppendLine("  }");
+            sb.AppendLine("  let current: any = nextVm;");
+            sb.AppendLine("  const parts = propName.split(/[.\\]\\[]/g).filter(Boolean);");
+            sb.AppendLine("  for (let i = 0; i < parts.length - 1; i++) {");
+            sb.AppendLine("    const p = parts[i];");
+            sb.AppendLine("    const key = (i === 0 && !propName.startsWith('[')) ? toCamel(p) : p;");
+            sb.AppendLine("    if (current[key] === undefined || current[key] === null) return { nextVm: vmState, changed: false };");
+            sb.AppendLine("    const nextChild = Array.isArray(current[key]) ? [...current[key]] : { ...current[key] };");
+            sb.AppendLine("    current[key] = nextChild;");
+            sb.AppendLine("    current = nextChild;");
+            sb.AppendLine("  }");
+            sb.AppendLine("  const lastPart = parts[parts.length - 1];");
+            sb.AppendLine("  const lastKey = (parts.length === 1) ? toCamel(lastPart) : lastPart;");
+            sb.AppendLine("  if (current[lastKey] === value) return { nextVm: vmState, changed: false };");
+            sb.AppendLine("  current[lastKey] = value;");
+            sb.AppendLine("  return { nextVm, changed: true };");
+            sb.AppendLine("}");
+            sb.AppendLine();
             
             // 2. Generate actual interface/enum definitions from the discovered list
             foreach (var type in _typesToGenerate)
@@ -117,15 +154,17 @@ namespace HybridApp.Core.Generators
                     sb.AppendLine("   */");
                 }
                 sb.AppendLine($"  {propName}: {vmName};");
+                sb.AppendLine($"  {propName}Instances: Record<string, {vmName}>;");
             }
             sb.AppendLine("}");
             sb.AppendLine();
 
             // 4. Generate Actions Interface
             sb.AppendLine("export interface AppActions {");
-            sb.AppendLine("  updateStateFromBackend: (vmName: string, propName: string, value: any) => void;");
-            sb.AppendLine("  setBackendState: (vmName: string, propName: string, value: any) => void;");
-            sb.AppendLine("  initFullState: (fullState: AppState) => void;");
+            sb.AppendLine("  updateStateFromBackend: (vmName: string, propName: string, value: any, vmType?: string) => void;");
+            sb.AppendLine("  setBackendState: (vmName: string, propName: string, value: any, vmType?: string) => void;");
+            sb.AppendLine("  setBackendInstanceState: (vmType: string, vmName: string, propName: string, value: any) => void;");
+            sb.AppendLine("  initFullState: (payload: any) => void;");
             sb.AppendLine("}");
             sb.AppendLine();
 
@@ -139,66 +178,73 @@ namespace HybridApp.Core.Generators
                 var vmName = attr?.Name ?? vm.Name;
                 var propName = ToCamelCase(vmName);
                 sb.AppendLine($"  {propName}: {{}} as {vmName},"); 
+                sb.AppendLine($"  {propName}Instances: {{}} as Record<string, {vmName}>,");
             }
 
             // Action: updateStateFromBackend
-            sb.AppendLine("  updateStateFromBackend: (vmName, propName, value) => set((state) => {");
-            sb.AppendLine("    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);");
-            sb.AppendLine("    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);");
-            sb.AppendLine("    if (!(stateKey in state)) return state;");
-            sb.AppendLine("    return { ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } };");
+            sb.AppendLine("  updateStateFromBackend: (vmName, propName, value, vmType) => set((state) => {");
+            sb.AppendLine("    const typeName = vmType ?? vmName;");
+            sb.AppendLine("    const stateKey = toCamel(typeName);");
+            sb.AppendLine("    const instanceStoreKey = getInstanceStoreKey(typeName);");
+            sb.AppendLine("    const currentInstance = (state as any)[instanceStoreKey]?.[vmName] ?? (vmName === typeName ? (state as any)[stateKey] : {});");
+            sb.AppendLine("    const { nextVm, changed } = patchVmState(currentInstance, propName, value);");
+            sb.AppendLine("    if (!changed) return state;");
+            sb.AppendLine("    const nextState: any = {");
+            sb.AppendLine("      ...state,");
+            sb.AppendLine("      [instanceStoreKey]: { ...((state as any)[instanceStoreKey] ?? {}), [vmName]: nextVm },");
+            sb.AppendLine("    };");
+            sb.AppendLine("    if (vmName === typeName) nextState[stateKey] = nextVm;");
+            sb.AppendLine("    return nextState;");
             sb.AppendLine("  }),");
 
             // Action: setBackendState (Dual-Sync)
-            sb.AppendLine("  setBackendState: (vmName, propName, value) => {");
-            sb.AppendLine("    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);");
-            sb.AppendLine("    const isPath = propName.includes('.') || propName.includes('[');");
+            sb.AppendLine("  setBackendState: (vmName, propName, value, vmType) => {");
+            sb.AppendLine("    const typeName = vmType ?? vmName;");
+            sb.AppendLine("    const stateKey = toCamel(typeName);");
+            sb.AppendLine("    const instanceStoreKey = getInstanceStoreKey(typeName);");
             sb.AppendLine("    let shouldUpdate = false;");
-            sb.AppendLine("    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)");
-            sb.AppendLine("    if (!isPath) {");
-            sb.AppendLine("      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);");
-            sb.AppendLine("      set((state) => {");
-            sb.AppendLine("        const currentState = (state as any)[stateKey];");
-            sb.AppendLine("        if (currentState && currentState[propKey] === value) return state;");
-            sb.AppendLine("        shouldUpdate = true;");
-            sb.AppendLine("        return { ...state, [stateKey]: { ...currentState, [propKey]: value } };");
-            sb.AppendLine("      });");
-            sb.AppendLine("    } else {");
-            sb.AppendLine("      // Support deep property update locally using mutative approach");
-            sb.AppendLine("      set((state) => {");
-            sb.AppendLine("         const newState = { ...state };");
-            sb.AppendLine("         const vmState = { ...(newState as any)[stateKey] };");
-            sb.AppendLine("         // Basic path parser for local immediate response");
-            sb.AppendLine("         let current: any = vmState;");
-            sb.AppendLine("         const parts = propName.split(/[.\\]\\[]/g).filter(Boolean);");
-            sb.AppendLine("         for (let i = 0; i < parts.length - 1; i++) {");
-            sb.AppendLine("             const p = parts[i];");
-            sb.AppendLine("             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;");
-            sb.AppendLine("             if (current[key] !== undefined) current = current[key];");
-            sb.AppendLine("         }");
-            sb.AppendLine("         const lastPart = parts[parts.length - 1];");
-            sb.AppendLine("         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;");
-            sb.AppendLine("         if (current[lastKey] === value) return state;");
-            sb.AppendLine("         shouldUpdate = true;");
-            sb.AppendLine("         current[lastKey] = value;");
-            sb.AppendLine("         newState[stateKey as keyof AppState] = vmState as any;");
-            sb.AppendLine("         return newState;");
-            sb.AppendLine("      });");
-            sb.AppendLine("    }");
-            sb.AppendLine("    // 2. Push to C# Backend only if value changed");
+            sb.AppendLine("    set((state) => {");
+            sb.AppendLine("      const currentInstance = (state as any)[instanceStoreKey]?.[vmName] ?? (vmName === typeName ? (state as any)[stateKey] : {});");
+            sb.AppendLine("      const { nextVm, changed } = patchVmState(currentInstance, propName, value);");
+            sb.AppendLine("      if (!changed) return state;");
+            sb.AppendLine("      shouldUpdate = true;");
+            sb.AppendLine("      const nextState: any = {");
+            sb.AppendLine("        ...state,");
+            sb.AppendLine("        [instanceStoreKey]: { ...((state as any)[instanceStoreKey] ?? {}), [vmName]: nextVm },");
+            sb.AppendLine("      };");
+            sb.AppendLine("      if (vmName === typeName) nextState[stateKey] = nextVm;");
+            sb.AppendLine("      return nextState;");
+            sb.AppendLine("    });");
             sb.AppendLine("    if (shouldUpdate && (window as any).chrome?.webview) {");
             sb.AppendLine("      (window as any).chrome.webview.postMessage({");
             sb.AppendLine("        type: 'STATE_SET',");
-            sb.AppendLine("        payload: { vmName, propName, value }");
+            sb.AppendLine("        payload: { vmType: typeName, vmName, propName, value }");
             sb.AppendLine("      });");
             sb.AppendLine("    }");
             sb.AppendLine("  },");
+            sb.AppendLine("  setBackendInstanceState: (vmType, vmName, propName, value) => {");
+            sb.AppendLine("    useAppStore.getState().setBackendState(vmName, propName, value, vmType);");
+            sb.AppendLine("  },");
 
-            sb.AppendLine("  initFullState: (fullState) => set((state) => {");
+            sb.AppendLine("  initFullState: (payload) => set((state) => {");
+            sb.AppendLine("    const response = payload?.instances ? payload : { state: payload };");
             sb.AppendLine("    const newState: any = { ...state };");
-            sb.AppendLine("    for (const key in fullState) {");
-            sb.AppendLine("        const stateKey = key.charAt(0).toLowerCase() + key.slice(1);");
-            sb.AppendLine("        newState[stateKey] = (fullState as any)[key];");
+            sb.AppendLine("    if (Array.isArray(response.instances)) {");
+            sb.AppendLine("      for (const item of response.instances) {");
+            sb.AppendLine("        const vmType = item.vmType ?? item.vmName;");
+            sb.AppendLine("        const vmName = item.vmName ?? vmType;");
+            sb.AppendLine("        const stateKey = toCamel(vmType);");
+            sb.AppendLine("        const instanceStoreKey = getInstanceStoreKey(vmType);");
+            sb.AppendLine("        newState[instanceStoreKey] = { ...(newState[instanceStoreKey] ?? {}), [vmName]: item.state };");
+            sb.AppendLine("        if (vmName === vmType) newState[stateKey] = item.state;");
+            sb.AppendLine("      }");
+            sb.AppendLine("      return newState;");
+            sb.AppendLine("    }");
+            sb.AppendLine("    for (const key in response.state) {");
+            sb.AppendLine("      const stateKey = toCamel(key);");
+            sb.AppendLine("      const instanceStoreKey = getInstanceStoreKey(key);");
+            sb.AppendLine("      newState[stateKey] = response.state[key];");
+            sb.AppendLine("      newState[instanceStoreKey] = { ...(newState[instanceStoreKey] ?? {}), [key]: response.state[key] };");
             sb.AppendLine("    }");
             sb.AppendLine("    return newState;");
             sb.AppendLine("  }),");
@@ -239,20 +285,20 @@ namespace HybridApp.Core.Generators
             sb.AppendLine("  });");
             sb.AppendLine("}");
             sb.AppendLine();
-            sb.AppendLine("function invokeCommand(vmName: string, methodName: string, args?: Record<string, any>): void {");
+            sb.AppendLine("function invokeCommand(vmName: string, methodName: string, args?: Record<string, any>, vmType?: string): void {");
             sb.AppendLine("  (window as any).chrome?.webview?.postMessage({");
             sb.AppendLine("    type: 'COMMAND',");
-            sb.AppendLine("    payload: { vmName, methodName, args: args ?? {} }");
+            sb.AppendLine("    payload: { vmType: vmType ?? vmName, vmName, methodName, args: args ?? {} }");
             sb.AppendLine("  });");
             sb.AppendLine("}");
             sb.AppendLine();
-            sb.AppendLine("function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: Record<string, any>): Promise<T> {");
+            sb.AppendLine("function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: Record<string, any>, vmType?: string): Promise<T> {");
             sb.AppendLine("  const requestId = `cmd_${++_commandIdCounter}_${Date.now()}`;");
             sb.AppendLine("  return new Promise<T>((resolve, reject) => {");
             sb.AppendLine("    _pendingCommands.set(requestId, { resolve, reject });");
             sb.AppendLine("    (window as any).chrome?.webview?.postMessage({");
             sb.AppendLine("      type: 'COMMAND',");
-            sb.AppendLine("      payload: { vmName, methodName, args: args ?? {}, requestId }");
+            sb.AppendLine("      payload: { vmType: vmType ?? vmName, vmName, methodName, args: args ?? {}, requestId }");
             sb.AppendLine("    });");
             sb.AppendLine("    // Timeout after 30 seconds");
             sb.AppendLine("    setTimeout(() => {");
@@ -314,12 +360,22 @@ namespace HybridApp.Core.Generators
                     if (hasReturn)
                     {
                         sb.AppendLine($"export function {vmName}_{method.Name}({paramsList}): Promise<{tsReturnType}> {{");
-                        sb.AppendLine($"  return invokeCommandAsync<{tsReturnType}>('{vmName}', '{method.Name}', {argsObj});");
+                        sb.AppendLine($"  return invokeCommandAsync<{tsReturnType}>('{vmName}', '{method.Name}', {argsObj}, '{vmName}');");
+                        sb.AppendLine("}");
+                        sb.AppendLine();
+                        var instanceParams = string.IsNullOrEmpty(paramsList) ? "vmName: string" : $"vmName: string, {paramsList}";
+                        sb.AppendLine($"export function {vmName}_{method.Name}For({instanceParams}): Promise<{tsReturnType}> {{");
+                        sb.AppendLine($"  return invokeCommandAsync<{tsReturnType}>(vmName, '{method.Name}', {argsObj}, '{vmName}');");
                     }
                     else
                     {
                         sb.AppendLine($"export function {vmName}_{method.Name}({paramsList}): void {{");
-                        sb.AppendLine($"  invokeCommand('{vmName}', '{method.Name}', {argsObj});");
+                        sb.AppendLine($"  invokeCommand('{vmName}', '{method.Name}', {argsObj}, '{vmName}');");
+                        sb.AppendLine("}");
+                        sb.AppendLine();
+                        var instanceParams = string.IsNullOrEmpty(paramsList) ? "vmName: string" : $"vmName: string, {paramsList}";
+                        sb.AppendLine($"export function {vmName}_{method.Name}For({instanceParams}): void {{");
+                        sb.AppendLine($"  invokeCommand(vmName, '{method.Name}', {argsObj}, '{vmName}');");
                     }
                     sb.AppendLine("}");
                     sb.AppendLine();
@@ -371,6 +427,29 @@ namespace HybridApp.Core.Generators
                     }
                     
                     sb.AppendLine($"  const key = '{vmName}_{ev.Name}';");
+                    sb.AppendLine($"  if (!_eventSubscribers.has(key)) {{");
+                    sb.AppendLine($"    _eventSubscribers.set(key, new Set());");
+                    sb.AppendLine($"  }}");
+                    sb.AppendLine($"  _eventSubscribers.get(key)!.add(callback as any);");
+                    sb.AppendLine($"  return () => {{");
+                    sb.AppendLine($"    const subs = _eventSubscribers.get(key);");
+                    sb.AppendLine($"    if (subs) {{");
+                    sb.AppendLine($"      subs.delete(callback as any);");
+                    sb.AppendLine($"      if (subs.size === 0) _eventSubscribers.delete(key);");
+                    sb.AppendLine($"    }}");
+                    sb.AppendLine($"  }};");
+                    sb.AppendLine("}");
+                    sb.AppendLine();
+
+                    if (argTsType == "void")
+                    {
+                        sb.AppendLine($"export function on{vmName}_{ev.Name}For(vmName: string, callback: () => void): () => void {{");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"export function on{vmName}_{ev.Name}For(vmName: string, callback: (args: {argTsType}) => void): () => void {{");
+                    }
+                    sb.AppendLine($"  const key = `${{vmName}}_{ev.Name}`;");
                     sb.AppendLine($"  if (!_eventSubscribers.has(key)) {{");
                     sb.AppendLine($"    _eventSubscribers.set(key, new Set());");
                     sb.AppendLine($"  }}");

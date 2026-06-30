@@ -10,7 +10,7 @@ namespace HybridApp.Core.ViewModels
         private double _gain = 1.0;
         private bool _isRunning = false;
 
-        public VisionVM() : base("VisionVM") { }
+        public VisionVM(string vmName = "VisionVM") : base(vmName) { }
 
         [SyncProperty(Description = "曝光时间（毫秒）")]
         public int Exposure

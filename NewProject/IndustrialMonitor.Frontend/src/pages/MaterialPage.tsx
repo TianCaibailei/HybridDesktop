@@ -86,6 +86,21 @@ const MaterialRowItem = ({
                     value={draft.angle} onChange={(e) => setDraft(d => ({ ...d, angle: parseFloat(e.target.value) || 0 }))} />
             </td>
             <td className="px-2 py-2 border-b border-slate-800/60 text-slate-300">
+                <label className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700/50 rounded px-2 py-1">
+                    <input
+                        type="checkbox"
+                        className="accent-indigo-500"
+                        checked={draft.isLightCut}
+                        onChange={(e) => setDraft(d => ({ ...d, isLightCut: e.target.checked }))}
+                    />
+                    <span className="text-xs whitespace-nowrap">光刀</span>
+                </label>
+            </td>
+            <td className="px-2 py-2 border-b border-slate-800/60 text-slate-300">
+                <input type="number" className="w-20 bg-slate-800 text-slate-200 border border-slate-700/50 rounded px-2 py-1 outline-none focus:border-indigo-500 no-spinners"
+                    value={draft.minZValue} onChange={(e) => setDraft(d => ({ ...d, minZValue: parseFloat(e.target.value) || 0 }))} />
+            </td>
+            <td className="px-2 py-2 border-b border-slate-800/60 text-slate-300">
                 <input type="number" className="w-20 bg-slate-800 text-slate-200 border border-slate-700/50 rounded px-2 py-1 outline-none focus:border-indigo-500 no-spinners"
                     value={draft.productLength} onChange={(e) => setDraft(d => ({ ...d, productLength: parseFloat(e.target.value) || 0 }))} />
             </td>
@@ -218,6 +233,11 @@ const MaterialCardItem = ({ material, index, onApply, clipboard, onCopy, onPaste
                     <div className="flex flex-col"><span className="text-slate-500 text-[10px]">角度</span><input type="number" className="bg-slate-900 text-slate-200 rounded px-1 no-spinners" value={draft.angle} onChange={e => updateField('angle', parseFloat(e.target.value) || 0)} /></div>
                     <div className="flex flex-col"><span className="text-slate-500 text-[10px]">阵列数</span><input type="number" className="bg-slate-900 text-slate-200 rounded px-1 no-spinners" value={draft.arrayCount} onChange={e => updateField('arrayCount', parseInt(e.target.value) || 0)} /></div>
                     <div className="flex flex-col"><span className="text-slate-500 text-[10px]">阵列间</span><input type="number" className="bg-slate-900 text-slate-200 rounded px-1 no-spinners" value={draft.arraySpacing} onChange={e => updateField('arraySpacing', parseFloat(e.target.value) || 0)} /></div>
+                    <div className="flex flex-col"><span className="text-slate-500 text-[10px]">最小Z值</span><input type="number" className="bg-slate-900 text-slate-200 rounded px-1 no-spinners" value={draft.minZValue} onChange={e => updateField('minZValue', parseFloat(e.target.value) || 0)} /></div>
+                    <div className="flex items-center justify-between bg-slate-900 rounded px-2 py-1">
+                        <span className="text-slate-500 text-[10px]">光刀</span>
+                        <input type="checkbox" className="accent-indigo-500" checked={draft.isLightCut} onChange={e => updateField('isLightCut', e.target.checked)} />
+                    </div>
                 </div>
             </div>
 
@@ -318,6 +338,8 @@ export default function MaterialPage() {
                                     <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">分中</th>
                                     <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">偏值Z</th>
                                     <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">角度</th>
+                                    <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">是否光刀</th>
+                                    <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">最小值</th>
                                     <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">产品长</th>
                                     <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">产品宽</th>
                                     <th className="px-4 py-3 border-b border-slate-700 font-semibold whitespace-nowrap">阵列数</th>

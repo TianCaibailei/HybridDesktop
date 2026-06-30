@@ -25,8 +25,9 @@ namespace HybridApp.Core.ViewModels
         /// ViewModel 的唯一标识符，用于前端路由
         /// </summary>
         public string VmName { get; }
+        public string VmType { get; }
         
-        private Action<string, string, object> _syncAction;
+        private Action<string, string, string, object> _syncAction;
         private SynchronizationContext _syncContext; // 用于跨线程触发 PropertyChanged 事件
 
         /// <summary>
@@ -45,9 +46,19 @@ namespace HybridApp.Core.ViewModels
         /// </summary>
         private readonly HashSet<object> _watchedObjects = new(ReferenceEqualityComparer.Instance);
 
-        protected SyncViewModelBase(string vmName)
+        protected SyncViewModelBase(string vmName, string vmType = null)
         {
             VmName = vmName;
+            VmType = vmType ?? ResolveVmType(GetType());
+        }
+
+        private static string ResolveVmType(Type type)
+        {
+            var attr = (SyncViewModelAttribute)Attribute.GetCustomAttribute(
+                type,
+                typeof(SyncViewModelAttribute),
+                inherit: true);
+            return attr?.Name ?? type.Name;
         }
 
         /// <summary>
@@ -55,11 +66,16 @@ namespace HybridApp.Core.ViewModels
         /// </summary>
         /// <param name="syncAction">同步回调动作</param>
         /// <param name="syncContext">同步上下文，用于跨线程触发 PropertyChanged。不传则自动使用 SynchronizationContext.Current</param>
-        public void AttachSyncAction(Action<string, string, object> syncAction, SynchronizationContext syncContext = null)
+        public void AttachSyncAction(Action<string, string, string, object> syncAction, SynchronizationContext syncContext = null)
         {
             _syncAction = syncAction;
             _syncContext = syncContext ?? SynchronizationContext.Current;
             InitDeepSync();
+        }
+
+        public void AttachSyncAction(Action<string, string, object> syncAction, SynchronizationContext syncContext = null)
+        {
+            AttachSyncAction((_, vmName, propName, value) => syncAction?.Invoke(vmName, propName, value), syncContext);
         }
 
         /// <summary>
@@ -84,7 +100,7 @@ namespace HybridApp.Core.ViewModels
                 _syncContext.Post((a)=> {
                     OnPropertyChanged(propertyName);
                     // 触发双向同步回调
-                    _syncAction?.Invoke(VmName, propertyName, value);
+                    _syncAction?.Invoke(VmType, VmName, propertyName, value);
                 },null);
             }
             else
@@ -92,7 +108,7 @@ namespace HybridApp.Core.ViewModels
                 OnPropertyChanged(propertyName);
 
                 // 触发双向同步回调
-                _syncAction?.Invoke(VmName, propertyName, value);
+                _syncAction?.Invoke(VmType, VmName, propertyName, value);
             }
             
 
@@ -118,7 +134,7 @@ namespace HybridApp.Core.ViewModels
 
                 var value = propInfo.GetValue(this);
                 OnPropertyChanged(propertyName);
-                _syncAction?.Invoke(VmName, propertyName, value);
+                _syncAction?.Invoke(VmType, VmName, propertyName, value);
             }
 
             if (_syncContext != null && _syncContext != SynchronizationContext.Current)

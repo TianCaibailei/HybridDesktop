@@ -2,6 +2,43 @@
 // Do not edit manually
 import { create } from 'zustand';
 
+type PatchResult = { nextVm: any; changed: boolean };
+
+function toCamel(value: string): string {
+  if (!value) return value;
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function getInstanceStoreKey(vmType: string): string {
+  return `${toCamel(vmType)}Instances`;
+}
+
+function patchVmState(vmState: any, propName: string, value: any): PatchResult {
+  const isPath = propName.includes('.') || propName.includes('[');
+  const nextVm = { ...(vmState ?? {}) };
+  if (!isPath) {
+    const propKey = toCamel(propName);
+    if (nextVm[propKey] === value) return { nextVm: vmState, changed: false };
+    nextVm[propKey] = value;
+    return { nextVm, changed: true };
+  }
+  let current: any = nextVm;
+  const parts = propName.split(/[.\]\[]/g).filter(Boolean);
+  for (let i = 0; i < parts.length - 1; i++) {
+    const p = parts[i];
+    const key = (i === 0 && !propName.startsWith('[')) ? toCamel(p) : p;
+    if (current[key] === undefined || current[key] === null) return { nextVm: vmState, changed: false };
+    const nextChild = Array.isArray(current[key]) ? [...current[key]] : { ...current[key] };
+    current[key] = nextChild;
+    current = nextChild;
+  }
+  const lastPart = parts[parts.length - 1];
+  const lastKey = (parts.length === 1) ? toCamel(lastPart) : lastPart;
+  if (current[lastKey] === value) return { nextVm: vmState, changed: false };
+  current[lastKey] = value;
+  return { nextVm, changed: true };
+}
+
 /**
  * 处理复杂嵌套对象和集合数据的示例 ViewModel
  */
@@ -77,75 +114,86 @@ export interface AppState {
    * 处理复杂嵌套对象和集合数据的示例 ViewModel
    */
   complexVM: ComplexVM;
+  complexVMInstances: Record<string, ComplexVM>;
   /**
    * 相机视觉控制模块，处理曝光、增益等实时参数
    */
   visionVM: VisionVM;
+  visionVMInstances: Record<string, VisionVM>;
 }
 
 export interface AppActions {
-  updateStateFromBackend: (vmName: string, propName: string, value: any) => void;
-  setBackendState: (vmName: string, propName: string, value: any) => void;
-  initFullState: (fullState: AppState) => void;
+  updateStateFromBackend: (vmName: string, propName: string, value: any, vmType?: string) => void;
+  setBackendState: (vmName: string, propName: string, value: any, vmType?: string) => void;
+  setBackendInstanceState: (vmType: string, vmName: string, propName: string, value: any) => void;
+  initFullState: (payload: any) => void;
 }
 
 export const useAppStore = create<AppState & AppActions>((set) => ({
   complexVM: {} as ComplexVM,
+  complexVMInstances: {} as Record<string, ComplexVM>,
   visionVM: {} as VisionVM,
-  updateStateFromBackend: (vmName, propName, value) => set((state) => {
-    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
-    const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
-    if (!(stateKey in state)) return state;
-    return { ...state, [stateKey]: { ...(state as any)[stateKey], [propKey]: value } };
+  visionVMInstances: {} as Record<string, VisionVM>,
+  updateStateFromBackend: (vmName, propName, value, vmType) => set((state) => {
+    const typeName = vmType ?? vmName;
+    const stateKey = toCamel(typeName);
+    const instanceStoreKey = getInstanceStoreKey(typeName);
+    const currentInstance = (state as any)[instanceStoreKey]?.[vmName] ?? (vmName === typeName ? (state as any)[stateKey] : {});
+    const { nextVm, changed } = patchVmState(currentInstance, propName, value);
+    if (!changed) return state;
+    const nextState: any = {
+      ...state,
+      [instanceStoreKey]: { ...((state as any)[instanceStoreKey] ?? {}), [vmName]: nextVm },
+    };
+    if (vmName === typeName) nextState[stateKey] = nextVm;
+    return nextState;
   }),
-  setBackendState: (vmName, propName, value) => {
-    const stateKey = vmName.charAt(0).toLowerCase() + vmName.slice(1);
-    const isPath = propName.includes('.') || propName.includes('[');
+  setBackendState: (vmName, propName, value, vmType) => {
+    const typeName = vmType ?? vmName;
+    const stateKey = toCamel(typeName);
+    const instanceStoreKey = getInstanceStoreKey(typeName);
     let shouldUpdate = false;
-    // 1. Update Local Store (Simple heuristic for pure root props vs deep paths)
-    if (!isPath) {
-      const propKey = propName.charAt(0).toLowerCase() + propName.slice(1);
-      set((state) => {
-        const currentState = (state as any)[stateKey];
-        if (currentState && currentState[propKey] === value) return state;
-        shouldUpdate = true;
-        return { ...state, [stateKey]: { ...currentState, [propKey]: value } };
-      });
-    } else {
-      // Support deep property update locally using mutative approach
-      set((state) => {
-         const newState = { ...state };
-         const vmState = { ...(newState as any)[stateKey] };
-         // Basic path parser for local immediate response
-         let current: any = vmState;
-         const parts = propName.split(/[.\]\[]/g).filter(Boolean);
-         for (let i = 0; i < parts.length - 1; i++) {
-             const p = parts[i];
-             const key = (i === 0 && !propName.startsWith('[')) ? (p.charAt(0).toLowerCase() + p.slice(1)) : p;
-             if (current[key] !== undefined) current = current[key];
-         }
-         const lastPart = parts[parts.length - 1];
-         const lastKey = (parts.length === 1) ? (lastPart.charAt(0).toLowerCase() + lastPart.slice(1)) : lastPart;
-         if (current[lastKey] === value) return state;
-         shouldUpdate = true;
-         current[lastKey] = value;
-         newState[stateKey as keyof AppState] = vmState as any;
-         return newState;
-      });
-    }
-    // 2. Push to C# Backend only if value changed
+    set((state) => {
+      const currentInstance = (state as any)[instanceStoreKey]?.[vmName] ?? (vmName === typeName ? (state as any)[stateKey] : {});
+      const { nextVm, changed } = patchVmState(currentInstance, propName, value);
+      if (!changed) return state;
+      shouldUpdate = true;
+      const nextState: any = {
+        ...state,
+        [instanceStoreKey]: { ...((state as any)[instanceStoreKey] ?? {}), [vmName]: nextVm },
+      };
+      if (vmName === typeName) nextState[stateKey] = nextVm;
+      return nextState;
+    });
     if (shouldUpdate && (window as any).chrome?.webview) {
       (window as any).chrome.webview.postMessage({
         type: 'STATE_SET',
-        payload: { vmName, propName, value }
+        payload: { vmType: typeName, vmName, propName, value }
       });
     }
   },
-  initFullState: (fullState) => set((state) => {
+  setBackendInstanceState: (vmType, vmName, propName, value) => {
+    useAppStore.getState().setBackendState(vmName, propName, value, vmType);
+  },
+  initFullState: (payload) => set((state) => {
+    const response = payload?.instances ? payload : { state: payload };
     const newState: any = { ...state };
-    for (const key in fullState) {
-        const stateKey = key.charAt(0).toLowerCase() + key.slice(1);
-        newState[stateKey] = (fullState as any)[key];
+    if (Array.isArray(response.instances)) {
+      for (const item of response.instances) {
+        const vmType = item.vmType ?? item.vmName;
+        const vmName = item.vmName ?? vmType;
+        const stateKey = toCamel(vmType);
+        const instanceStoreKey = getInstanceStoreKey(vmType);
+        newState[instanceStoreKey] = { ...(newState[instanceStoreKey] ?? {}), [vmName]: item.state };
+        if (vmName === vmType) newState[stateKey] = item.state;
+      }
+      return newState;
+    }
+    for (const key in response.state) {
+      const stateKey = toCamel(key);
+      const instanceStoreKey = getInstanceStoreKey(key);
+      newState[stateKey] = response.state[key];
+      newState[instanceStoreKey] = { ...(newState[instanceStoreKey] ?? {}), [key]: response.state[key] };
     }
     return newState;
   }),
@@ -182,20 +230,20 @@ if ((window as any).chrome?.webview) {
   });
 }
 
-function invokeCommand(vmName: string, methodName: string, args?: Record<string, any>): void {
+function invokeCommand(vmName: string, methodName: string, args?: Record<string, any>, vmType?: string): void {
   (window as any).chrome?.webview?.postMessage({
     type: 'COMMAND',
-    payload: { vmName, methodName, args: args ?? {} }
+    payload: { vmType: vmType ?? vmName, vmName, methodName, args: args ?? {} }
   });
 }
 
-function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: Record<string, any>): Promise<T> {
+function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: Record<string, any>, vmType?: string): Promise<T> {
   const requestId = `cmd_${++_commandIdCounter}_${Date.now()}`;
   return new Promise<T>((resolve, reject) => {
     _pendingCommands.set(requestId, { resolve, reject });
     (window as any).chrome?.webview?.postMessage({
       type: 'COMMAND',
-      payload: { vmName, methodName, args: args ?? {}, requestId }
+      payload: { vmType: vmType ?? vmName, vmName, methodName, args: args ?? {}, requestId }
     });
     // Timeout after 30 seconds
     setTimeout(() => {
@@ -212,7 +260,11 @@ function invokeCommandAsync<T = any>(vmName: string, methodName: string, args?: 
  * @param reason string
  */
 export function VisionVM_ToggleRunning(reason: string): void {
-  invokeCommand('VisionVM', 'ToggleRunning', { reason });
+  invokeCommand('VisionVM', 'ToggleRunning', { reason }, 'VisionVM');
+}
+
+export function VisionVM_ToggleRunningFor(vmName: string, reason: string): void {
+  invokeCommand(vmName, 'ToggleRunning', { reason }, 'VisionVM');
 }
 
 /**
@@ -221,6 +273,10 @@ export function VisionVM_ToggleRunning(reason: string): void {
  * @returns Promise<string>
  */
 export function VisionVM_GetStatusSummary(prefix: string): Promise<string> {
-  return invokeCommandAsync<string>('VisionVM', 'GetStatusSummary', { prefix });
+  return invokeCommandAsync<string>('VisionVM', 'GetStatusSummary', { prefix }, 'VisionVM');
+}
+
+export function VisionVM_GetStatusSummaryFor(vmName: string, prefix: string): Promise<string> {
+  return invokeCommandAsync<string>(vmName, 'GetStatusSummary', { prefix }, 'VisionVM');
 }
 

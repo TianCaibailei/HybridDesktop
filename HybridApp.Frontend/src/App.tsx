@@ -32,10 +32,10 @@ function App() {
         : event.data;
 
       if (data && data.type === 'STATE_SYNC') {
-        const { vmName, propName, value } = data.payload;
-        updateStateFromBackend(vmName, propName, value);
+        const { vmType, vmName, propName, value } = data.payload;
+        updateStateFromBackend(vmName, propName, value, vmType);
       } else if (data && data.type === 'INIT_RESPONSE') {
-        initFullState(data.state);
+        initFullState(data);
       }
     };
 

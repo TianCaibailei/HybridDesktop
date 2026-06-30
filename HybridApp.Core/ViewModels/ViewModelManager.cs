@@ -64,14 +64,14 @@ namespace HybridApp.Core.ViewModels
 
             // 自动配置同步联动：当后端 C# 属性变化时，自动序列化并推送到前端
             // 传入 SynchronizationContext 确保 PropertyChanged 事件在 UI 线程触发（解决 WinForms DataBindings 跨线程问题）
-            vm.AttachSyncAction((vmName, propName, value) =>
+            vm.AttachSyncAction((vmType, vmName, propName, value) =>
             {
                 void SendStateSync()
                 {
                     var message = new
                     {
                         type = "STATE_SYNC",
-                        payload = new { vmName, propName, value }
+                        payload = new { vmType, vmName, propName, value }
                     };
 
                     try
@@ -145,7 +145,7 @@ namespace HybridApp.Core.ViewModels
                 }
 
                 var proxyType = typeof(EventProxy<>).MakeGenericType(argsType);
-                var proxyInstance = Activator.CreateInstance(proxyType, this, vm.VmName, ev.Name);
+                var proxyInstance = Activator.CreateInstance(proxyType, this, vm.VmType, vm.VmName, ev.Name);
                 if (proxyInstance == null) continue;
 
                 var proxyMethod = proxyType.GetMethod(targetMethodName);
@@ -182,7 +182,7 @@ namespace HybridApp.Core.ViewModels
         /// <summary>
         /// 消息循环核心逻辑
         /// </summary>
-        private void OnWebMessageReceived(object sender, CoreWebView2WebMessageReceivedEventArgs e)
+        private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
             try
             {
@@ -230,9 +230,12 @@ namespace HybridApp.Core.ViewModels
                 payload.TryGetProperty("value", out var valueElement))
             {
                 string vmName = vmNameElement.GetString();
+                string vmType = payload.TryGetProperty("vmType", out var vmTypeElement)
+                    ? vmTypeElement.GetString()
+                    : null;
                 string propName = propNameElement.GetString();
 
-                if (_vms.TryGetValue(vmName, out var vm))
+                if (TryGetRegisteredVm(vmName, vmType, out var vm))
                 {
                     vm.SetPropertyByName(propName, valueElement);
                 }
@@ -253,6 +256,9 @@ namespace HybridApp.Core.ViewModels
                 return;
 
             string vmName = vmNameEl.GetString();
+            string vmType = payload.TryGetProperty("vmType", out var vmTypeEl)
+                ? vmTypeEl.GetString()
+                : null;
             string methodName = methodNameEl.GetString();
 
             // 可选：前端传来的 requestId，用于将返回值回传给对应的 Promise
@@ -260,9 +266,10 @@ namespace HybridApp.Core.ViewModels
             if (payload.TryGetProperty("requestId", out var reqIdEl))
                 requestId = reqIdEl.GetString();
 
-            if (!_commands.TryGetValue(vmName, out var cmdDict) ||
+            if (!TryGetRegisteredVm(vmName, vmType, out var vm) ||
+                !_commands.TryGetValue(vm.VmName, out var cmdDict) ||
                 !cmdDict.TryGetValue(methodName, out var cmdInfo) ||
-                !_vms.TryGetValue(vmName, out var vm))
+                vm == null)
             {
                 System.Diagnostics.Debug.WriteLine($"[CommandError] Command not found: {vmName}.{methodName}");
                 SendCommandResponse(requestId, false, null, $"Command not found: {vmName}.{methodName}");
@@ -365,10 +372,20 @@ namespace HybridApp.Core.ViewModels
                 stateDict[kvp.Key] = kvp.Value; 
             }
 
+            var instances = _vms
+                .Select(kvp => new
+                {
+                    vmType = kvp.Value.VmType,
+                    vmName = kvp.Key,
+                    state = (object)kvp.Value
+                })
+                .ToList();
+
             var message = new
             {
                 type = "INIT_RESPONSE",
-                state = stateDict
+                state = stateDict,
+                instances
             };
 
             try
@@ -382,7 +399,32 @@ namespace HybridApp.Core.ViewModels
             }
         }
 
+        private bool TryGetRegisteredVm(string vmName, string vmType, out SyncViewModelBase vm)
+        {
+            if (!string.IsNullOrEmpty(vmName) && _vms.TryGetValue(vmName, out vm))
+                return true;
+
+            if (!string.IsNullOrEmpty(vmType))
+            {
+                var matches = _vms.Values.Where(v => v.VmType == vmType).Take(2).ToList();
+                if (matches.Count == 1)
+                {
+                    vm = matches[0];
+                    return true;
+                }
+            }
+
+            vm = null;
+            return false;
+        }
+
         public void SendEventToFrontend(string vmName, string eventName, object args)
+        {
+            var vmType = _vms.TryGetValue(vmName, out var vm) ? vm.VmType : vmName;
+            SendEventToFrontend(vmType, vmName, eventName, args);
+        }
+
+        public void SendEventToFrontend(string vmType, string vmName, string eventName, object args)
         {
             if (_webView == null) return;
 
@@ -391,7 +433,7 @@ namespace HybridApp.Core.ViewModels
                 var message = new
                 {
                     type = "BACKEND_EVENT",
-                    payload = new { vmName, eventName, args }
+                    payload = new { vmType, vmName, eventName, args }
                 };
 
                 try
@@ -419,29 +461,31 @@ namespace HybridApp.Core.ViewModels
         private class EventProxy<TArgs>
         {
             private readonly ViewModelManager _manager;
+            private readonly string _vmType;
             private readonly string _vmName;
             private readonly string _eventName;
 
-            public EventProxy(ViewModelManager manager, string vmName, string eventName)
+            public EventProxy(ViewModelManager manager, string vmType, string vmName, string eventName)
             {
                 _manager = manager;
+                _vmType = vmType;
                 _vmName = vmName;
                 _eventName = eventName;
             }
 
             public void OnEventHandlerFired(object sender, TArgs args)
             {
-                _manager.SendEventToFrontend(_vmName, _eventName, args);
+                _manager.SendEventToFrontend(_vmType, _vmName, _eventName, args);
             }
 
             public void OnActionFired(TArgs args)
             {
-                _manager.SendEventToFrontend(_vmName, _eventName, args);
+                _manager.SendEventToFrontend(_vmType, _vmName, _eventName, args);
             }
 
             public void OnActionZeroFired()
             {
-                _manager.SendEventToFrontend(_vmName, _eventName, null);
+                _manager.SendEventToFrontend(_vmType, _vmName, _eventName, null);
             }
         }
     }

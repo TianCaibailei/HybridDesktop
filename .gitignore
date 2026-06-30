@@ -487,3 +487,7 @@ $RECYCLE.BIN/
 NewProject/IndustrialMonitor.Frontend/dist/index.html
 NewProject/IndustrialMonitor.Frontend/dist/assets/index-BA0B9Ms-.css
 NewProject/IndustrialMonitor.Frontend/dist/assets/index-BX9x0bd4.js
+
+# Local workspace/tooling
+.workbuddy/
+nul

@@ -250,6 +250,14 @@ export interface MaterialItem {
    * 阵列间
    */
   arraySpacing: number;
+  /**
+   * 是否光刀
+   */
+  isLightCut: boolean;
+  /**
+   * 最小Z值
+   */
+  minZValue: number;
 }
 
 export interface FormResult {
