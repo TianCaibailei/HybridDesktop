@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -599,7 +600,15 @@ namespace HybridApp.Core.Generators
             else if (targetType.IsGenericType)
             {
                 var genericDef = targetType.GetGenericTypeDefinition();
-                if (genericDef == typeof(List<>) || genericDef == typeof(IEnumerable<>) || genericDef == typeof(IList<>) || genericDef == typeof(IReadOnlyList<>))
+                if (genericDef == typeof(List<>) ||
+                    genericDef == typeof(IEnumerable<>) ||
+                    genericDef == typeof(IList<>) ||
+                    genericDef == typeof(IReadOnlyList<>) ||
+                    genericDef == typeof(ICollection<>) ||
+                    genericDef == typeof(IReadOnlyCollection<>) ||
+                    genericDef == typeof(ISet<>) ||
+                    genericDef == typeof(HashSet<>) ||
+                    genericDef == typeof(ObservableCollection<>))
                 {
                     var argType = targetType.GetGenericArguments()[0];
                     tsType = $"{MapToTsType(argType)}[]";
